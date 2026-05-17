@@ -561,6 +561,7 @@
         }
     }
 
+    // Función mejorada: Importar Base de Datos (Traductor Universal)
     function procesarArchivoImportacion(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -569,43 +570,72 @@
         reader.onload = async function(e) {
             try {
                 const data = JSON.parse(e.target.result);
-                mostrarToast("Restaurando datos a Firebase...");
+                mostrarToast("Analizando y restaurando datos a Firebase...");
                 
                 const promesasDeSubida = [];
 
-                // Restaurar Configuración
-                if (data.configuracion) {
-                    promesasDeSubida.push(configRef.set(data.configuracion));
+                // 1. Restaurar Configuración (Maneja el formato nuevo 'configuracion' y el antiguo 'config')
+                let configFinal = data.configuracion || data.config || {};
+                
+                // Si el JSON trae los catálogos por separado (formato antiguo), los unimos
+                if (data.catalogos) {
+                    configFinal.almacenes = data.catalogos.almacenes || [];
+                    configFinal.categorias = data.catalogos.categorias || [];
+                    configFinal.unidades = data.catalogos.unidades || [];
+                }
+                
+                if (Object.keys(configFinal).length > 0) {
+                    promesasDeSubida.push(configRef.set(configFinal, { merge: true }));
                 }
 
-                // Restaurar Productos
-                if (data.productos && Array.isArray(data.productos)) {
-                    data.productos.forEach(p => {
-                        if (p.codigo) promesasDeSubida.push(db.collection('productos').doc(p.codigo).set(p));
+                // 2. Restaurar Productos (Busca la carpeta 'productos' o la antigua 'ingresos')
+                const listaProductos = data.productos || data.ingresos || [];
+                if (Array.isArray(listaProductos)) {
+                    listaProductos.forEach(p => {
+                        // El JSON antiguo usa 'cod', el nuevo usa 'codigo'. Tomamos el que exista.
+                        const idDoc = p.codigo || p.cod || p.id;
+                        if (idDoc) {
+                            // Guardamos siempre en la colección oficial 'productos' de Firebase
+                            promesasDeSubida.push(db.collection('productos').doc(idDoc).set(p));
+                        }
                     });
                 }
 
-                // Restaurar Ventas
+                // 3. Restaurar Ventas
                 if (data.ventas && Array.isArray(data.ventas)) {
                     data.ventas.forEach(v => {
                         if (v.id) promesasDeSubida.push(db.collection('ventas').doc(v.id).set(v));
                     });
                 }
 
-                // Restaurar Clientes
+                // 4. Restaurar Clientes
                 if (data.clientes && Array.isArray(data.clientes)) {
                     data.clientes.forEach(c => {
-                        if (c.dni) promesasDeSubida.push(db.collection('clientes').doc(c.dni).set(c));
+                        const idCliente = c.dni || c.id;
+                        if (idCliente) promesasDeSubida.push(db.collection('clientes').doc(idCliente).set(c));
                     });
                 }
 
-                // Ejecutar todas las subidas de forma paralela sin límite de batch
+                // 5. Restaurar Usuarios (Viene en tu archivo JSON)
+                if (data.usuarios && Array.isArray(data.usuarios)) {
+                    data.usuarios.forEach(u => {
+                        const idUser = u.dni || u.id;
+                        if (idUser) promesasDeSubida.push(db.collection('usuarios').doc(idUser).set(u));
+                    });
+                }
+
+                // Si no encontró nada compatible, avisa al usuario
+                if(promesasDeSubida.length === 0) {
+                   return mostrarAlerta("Archivo Vacío o Incompatible", "No se encontraron datos válidos para restaurar.", "warning");
+                }
+
+                // Ejecutar todas las subidas de forma paralela
                 await Promise.all(promesasDeSubida);
                 
-                mostrarAlerta("Restauración Exitosa", "Toda la información del archivo ha sido inyectada en la Nube correctamente.", "success");
+                mostrarAlerta("Restauración Exitosa", `Se han inyectado ${promesasDeSubida.length} registros en la Nube correctamente.`, "success");
                 
                 // Recargar para que los cambios surtan efecto en la vista actual
-                setTimeout(() => location.reload(), 2500);
+                setTimeout(() => location.reload(), 3000);
 
             } catch (error) {
                 console.error(error);
