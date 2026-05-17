@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>M.E.F. - Gestión de Inventario</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="seguridad.js"></script>
+    
+    <style>
+        /* ==========================================
+           SISTEMA DE DISEÑO POLARIS (Estilo Profesional)
+           ========================================== */
+        :root {
+            --p-surface: #ffffff; --p-background: #f4f6f8; --p-text: #202223; --p-text-subdued: #6d7175;
+            --p-border: #c9cccf; --p-border-subdued: #1e293b; --p-action-primary: #1e293b;
+            --p-action-primary-hover: #0f172a; --p-interactive: #2c6ecb; --p-critical: #d82c0d;
+            --p-warning: #b98900; --p-success: #108043;
+            --p-shadow-card: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent;}
+        
+        body { background-color: var(--p-background); color: var(--p-text); height: 100vh; width: 100vw; overflow: hidden; display: flex; flex-direction: column; }
+
+        .top-fixed-section { flex-shrink: 0; background: var(--p-background); z-index: 10; box-shadow: 0 4px 10px rgba(0,0,0,0.05); padding-bottom: 10px; }
+
+        .polaris-header { background-color: #1e293b; padding: 12px 20px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+        .polaris-header h1 { font-size: 16px; font-weight: 600; color: #ffffff; line-height: 1.2; text-align: center; text-transform: uppercase;}
+        
+        .header-icon-btn { color: white; cursor: pointer; transition: opacity 0.2s; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 4px; }
+        .header-icon-btn:hover { opacity: 0.8; background: rgba(255,255,255,0.1); }
+
+        .system-info { display: flex; justify-content: space-between; align-items: center; background: var(--p-surface); padding: 8px 20px; font-size: 12px; color: var(--p-text-subdued); border-bottom: 1px solid var(--p-border); }
+
+        .dashboard-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 20px; max-width: 900px; margin: 0 auto; }
+        .dash-card { background: var(--p-surface); border: 1px solid var(--p-border); border-radius: 8px; padding: 12px; text-align: center; box-shadow: var(--p-shadow-card); display: flex; flex-direction: column; gap: 2px; border-top: 3px solid var(--p-action-primary); }
+        .dash-card h3 { font-size: 11px; color: var(--p-text-subdued); text-transform: uppercase; font-weight: 700;}
+        .dash-card .value { font-size: 18px; font-weight: 800; color: var(--p-action-primary); }
+
+        .search-box { background: var(--p-surface); border: 1px solid var(--p-border); border-radius: 8px; padding: 12px; margin: 0 20px 5px 20px; box-shadow: var(--p-shadow-card); max-width: 860px; margin-left: auto; margin-right: auto; }
+        .search-title { font-size: 13px; font-weight: 700; margin-bottom: 8px; color: var(--p-action-primary); display: flex; align-items: center; gap: 5px; }
+        .search-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+        .search-input { width: 100%; padding: 8px 10px; border: 1px solid var(--p-border); border-radius: 4px; font-size: 12px; color: var(--p-text); background: var(--p-background); transition: border 0.2s; }
+        .search-input:focus { outline: none; border-color: var(--p-interactive); background: var(--p-surface);}
+
+        .btn-limpiar { background: #ffffff; color: var(--p-text-subdued); border: 1px solid var(--p-border); padding: 4px 12px; border-radius: 16px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 10px; margin-left: auto; width: fit-content; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .btn-limpiar:hover { background: #f4f6f8; color: var(--p-action-primary); border-color: var(--p-border-subdued); }
+
+        .kpi-count { padding: 5px 20px 0; font-size: 12px; color: var(--p-text-subdued); font-weight: 600; max-width: 900px; margin: 0 auto;}
+
+        .scrollable-list { flex-grow: 1; overflow-y: auto; padding-top: 10px; padding-bottom: 90px; }
+        .scrollable-list::-webkit-scrollbar { width: 0px; background: transparent; }
+
+        .inventory-list { padding: 0 20px; display: flex; flex-direction: column; gap: 12px; max-width: 900px; margin: 0 auto; }
+        
+        .inv-card { background: var(--p-surface); border: 1px solid var(--p-border); border-radius: 10px; overflow: hidden; box-shadow: var(--p-shadow-card); }
+        .inv-header { background: #fafbfb; color: var(--p-text-subdued); padding: 10px 16px; display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; border-bottom: 1px solid var(--p-border); }
+        .inv-header span:first-child { color: var(--p-action-primary); }
+
+        .inv-body { padding: 16px; }
+        .inv-title { font-size: 15px; font-weight: 700; margin-bottom: 10px; color: var(--p-text); text-transform: uppercase; word-break: break-word;}
+        
+        .inv-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px; }
+        .stat-group { display: flex; flex-direction: column; gap: 2px;}
+        .stat-label { color: var(--p-text-subdued); font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;}
+        .stat-val { font-weight: 700; color: var(--p-text); }
+
+        .stock-container { display: flex; align-items: center; justify-content: space-between; background: var(--p-background); padding: 10px 12px; border-radius: 8px; margin-top: 12px; border: 1px solid var(--p-border); }
+        .stock-badge { display: flex; align-items: center; gap: 4px; font-weight: 700; padding: 4px 10px; border-radius: 20px; font-size: 12px; }
+        .stock-ok { background: #e8f5e9; color: var(--p-success); }
+        .stock-warn { background: #fff3e0; color: var(--p-warning); }
+        .stock-danger { background: #ffebee; color: var(--p-critical); }
+        
+        .financial-details { border-top: 1px dashed var(--p-border); margin-top: 12px; padding-top: 10px; display: flex; justify-content: space-between; font-size: 12px; color: var(--p-text-subdued); }
+        .financial-details strong { color: var(--p-text); font-weight: 700;}
+
+        .empty-state { text-align: center; padding: 40px 20px; color: var(--p-text-subdued); background: var(--p-surface); border-radius: 12px; border: 2px dashed var(--p-border); margin: 0 20px; }
+
+        .fab-export { position: fixed; bottom: 25px; right: 25px; background-color: var(--p-success); color: white; width: 56px; height: 56px; border-radius: 50%; display: flex; justify-content: center; align-items: center; box-shadow: 0 4px 12px rgba(16, 128, 67, 0.4); border: none; cursor: pointer; transition: transform 0.2s, background 0.2s; z-index: 100; }
+        .fab-export:active { transform: scale(0.90); }
+        .fab-export:hover { background-color: #0b5c30; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(32, 34, 35, 0.8); display: none; justify-content: center; align-items: center; z-index: 1000; opacity: 0; animation: fadeIn 0.2s forwards; }
+        .modal-content { background: var(--p-surface); width: 90%; max-width: 400px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; transform: scale(0.95); animation: scaleUp 0.2s forwards; }
+        .modal-header { padding: 16px 20px; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; border-bottom: 1px solid var(--p-border); }
+        .modal-body { padding: 20px; color: var(--p-text); font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+        .modal-footer { padding: 16px 20px; background: #fafbfb; border-top: 1px solid var(--p-border); display: flex; justify-content: flex-end; gap: 10px;}
+        
+        .modal-header.warning { color: var(--p-warning); } .modal-header.error { color: var(--p-critical); }
+        .polaris-btn-primary { background-color: var(--p-action-primary); color: white; border: 1px solid transparent; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 1px 0 rgba(0,0,0,0.05); transition: background 0.2s; }
+        .polaris-btn-primary:hover { background-color: #0f172a; }
+
+        @keyframes fadeIn { to { opacity: 1; } } @keyframes scaleUp { to { transform: scale(1); } }
+        
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid var(--p-action-primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="top-fixed-section">
+        <header class="polaris-header">
+            <div style="display: flex; justify-content: flex-start;"></div>
+            <h1 id="header-titulo">STOCK DE PRODUCTOS</h1>
+            <div style="display: flex; justify-content: flex-end;">
+                <span class="material-icons-round header-icon-btn" onclick="window.location.href='Control.html'" title="Volver al Panel" style="font-size: 24px;">inventory_2</span>
+            </div>
+        </header>
+
+        <div class="system-info">
+            <span id="fecha-generado">Generado: --/--/----</span>
+            <span style="font-weight: 600; color: var(--p-action-primary);">Moneda: S/ (PEN)</span>
+        </div>
+
+        <div class="dashboard-grid">
+            <div class="dash-card">
+                <h3>Costo Inventario</h3>
+                <div class="value" id="kpi-costo">S/ 0.00</div>
+            </div>
+            <div class="dash-card">
+                <h3>Valorización</h3>
+                <div class="value" id="kpi-precio" style="color: var(--p-interactive);">S/ 0.00</div>
+            </div>
+        </div>
+
+        <div class="search-box">
+            <div class="search-title">
+                <span class="material-icons-outlined" style="font-size: 16px;">manage_search</span> Búsqueda Rápida
+            </div>
+            <div class="search-grid">
+                <input type="text" id="filtro-codigo" class="search-input" placeholder="Código SKU" onkeyup="aplicarFiltros()">
+                <input type="text" id="filtro-cat" class="search-input" placeholder="Categoría" onkeyup="aplicarFiltros()">
+                <input type="text" id="filtro-nombre" class="search-input" placeholder="Nombre de Producto" onkeyup="aplicarFiltros()" style="grid-column: 1 / -1;">
+            </div>
+            <button type="button" class="btn-limpiar" onclick="limpiarFiltros()">
+                <span class="material-icons-outlined" style="font-size: 14px;">filter_alt_off</span> Limpiar Filtros
+            </button>
+        </div>
+
+        <div class="kpi-count">
+            Total de Registros: <span id="kpi-cantidad" style="color: var(--p-action-primary);">0</span>
+        </div>
+    </div>
+
+    <div class="scrollable-list">
+        <div class="inventory-list" id="contenedor-inventario">
+            <div class="loader"></div>
+        </div>
+    </div>
+
+    <button class="fab-export" onclick="exportarDatos()" title="Exportar Vista Actual a Excel">
+        <span class="material-icons-outlined" style="font-size: 24px;">file_download</span>
+    </button>
+
+    <div id="modal-alerta" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header" id="alerta-header">
+                <span class="material-icons-outlined" id="alerta-icon">warning</span>
+                <h3 id="alerta-titulo">Atención</h3>
+            </div>
+            <div class="modal-body" id="alerta-mensaje">Mensaje de error aquí.</div>
+            <div class="modal-footer">
+                <button class="polaris-btn-primary" onclick="cerrarAlerta()">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // 1. INICIALIZAR FIREBASE
+    const firebaseConfig = {
+        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
+        authDomain: "pos-mef-ventas.firebaseapp.com",
+        projectId: "pos-mef-ventas",
+        storageBucket: "pos-mef-ventas.firebasestorage.app",
+        messagingSenderId: "704671042289",
+        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // Variables globales para la gestión en memoria
+    let globalInventario = [];
+    let datosFiltrados = [];
+    let configGlobal = { igv: 18, descmax: 50, margenSugerido: 30 };
+    const formatoSoles = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' });
+
+    // ==========================================
+    // SISTEMA VISUAL DE ALERTAS
+    // ==========================================
+    function mostrarAlerta(titulo, mensaje, tipo = 'warning') {
+        const modal = document.getElementById('modal-alerta');
+        const header = document.getElementById('alerta-header');
+        const icon = document.getElementById('alerta-icon');
+        
+        document.getElementById('alerta-titulo').innerText = titulo;
+        document.getElementById('alerta-mensaje').innerText = mensaje;
+        header.className = 'modal-header'; 
+        
+        if (tipo === 'warning') { header.classList.add('warning'); icon.innerText = 'warning'; } 
+        else if (tipo === 'success') { header.style.color = 'var(--p-success)'; icon.innerText = 'check_circle'; }
+        else if (tipo === 'error') { header.classList.add('error'); icon.innerText = 'error'; }
+
+        modal.style.display = 'flex';
+    }
+    function cerrarAlerta() { document.getElementById('modal-alerta').style.display = 'none'; }
+
+    // ==========================================
+    // DESCARGAR Y PROCESAR INVENTARIO (NUBE)
+    // ==========================================
+    async function cargarInventarioNube() {
+        try {
+            // 1. Cargar configuración de impuestos y márgenes para cálculos precisos
+            const confSnap = await db.collection('sistema').doc('configuracion').get();
+            if (confSnap.exists) {
+                const data = confSnap.data();
+                configGlobal.igv = parseFloat(data.igv) || 0;
+                configGlobal.descmax = parseFloat(data.descmax) || 0;
+                configGlobal.margenSugerido = parseFloat(data.margenSugerido) || 0;
+            }
+
+            // 2. Descargar todos los productos válidos de Firebase
+            const prodSnap = await db.collection('productos').where('anulado', '==', false).get();
+            globalInventario = [];
+
+            // Factor para extraer el costo unitario puro a partir del precio de venta final
+            const factorCalculo = (1 + (configGlobal.margenSugerido / 100)) * (1 + (configGlobal.igv / 100));
+
+            prodSnap.forEach(doc => {
+                const p = doc.data();
+                const stockActual = parseFloat(p.cant) || 0;
+                const precioUnitario = parseFloat(p.precioUnitarioPEN) || 0;
+                
+                // Ingeniería Inversa: Calculamos el costo unitario sin importar si el stock bajó
+                let costoUnitario = 0;
+                if(factorCalculo > 0) {
+                    costoUnitario = precioUnitario / factorCalculo;
+                }
+
+                globalInventario.push({
+                    codigo: p.cod,
+                    nombre: p.nombre,
+                    categoria: p.categoria || "General",
+                    almacen: p.almacen || "N/A",
+                    stockActual: stockActual,
+                    costoUnitario: costoUnitario,
+                    precioUnitario: precioUnitario,
+                    costoTotal: stockActual * costoUnitario,
+                    precioTotal: stockActual * precioUnitario,
+                    desc: configGlobal.descmax
+                });
+            });
+
+            // Asignar colores de estado (Semáforo de Stock)
+            globalInventario = globalInventario.map(prod => {
+                let estadoClass = "stock-ok";
+                let estadoIcon = "check_circle";
+                
+                if (prod.stockActual <= 0) {
+                    estadoClass = "stock-danger"; estadoIcon = "cancel"; 
+                } else if (prod.stockActual < 10) {
+                    estadoClass = "stock-warn"; estadoIcon = "warning"; 
+                }
+                return { ...prod, estadoClass, estadoIcon };
+            });
+
+            // Inicializamos la vista filtrada con todos los datos
+            datosFiltrados = [...globalInventario];
+            aplicarFiltros(); 
+
+        } catch (error) {
+            console.error("Error al descargar inventario:", error);
+            document.getElementById('contenedor-inventario').innerHTML = `
+                <div class="empty-state" style="border-color: #fca5a5; color: #b91c1c;">
+                    <span class="material-icons-outlined" style="font-size: 32px; margin-bottom: 10px;">cloud_off</span>
+                    <p>Error de conexión al cargar la base de datos.</p>
+                </div>`;
+            mostrarAlerta("Error Crítico", "No se pudo conectar a Firebase para leer el inventario.", "error");
+        }
+    }
+
+    // ==========================================
+    // RENDERIZADO VISUAL
+    // ==========================================
+    function renderizarInventario(datos) {
+        const contenedor = document.getElementById('contenedor-inventario');
+        contenedor.innerHTML = '';
+
+        let sumaCosto = 0;
+        let sumaPrecio = 0;
+
+        if (datos.length === 0) {
+            contenedor.innerHTML = `
+                <div class="empty-state">
+                    <span class="material-icons-round" style="font-size: 48px; color: #cbd5e1;">inventory_2</span>
+                    <p style="margin-top: 15px; font-weight: 700; font-size: 16px; color: var(--p-action-primary);">Inventario Vacío</p>
+                    <p style="font-size: 14px; margin-top: 5px;">No hay productos que coincidan con la búsqueda actual.</p>
+                </div>
+            `;
+            document.getElementById('kpi-costo').innerText = formatoSoles.format(0);
+            document.getElementById('kpi-precio').innerText = formatoSoles.format(0);
+            document.getElementById('kpi-cantidad').innerText = 0;
+            return;
+        }
+
+        datos.forEach(item => {
+            if (item.stockActual > 0) {
+                sumaCosto += item.costoTotal;
+                sumaPrecio += item.precioTotal;
+            }
+
+            const card = document.createElement('div');
+            card.className = 'inv-card';
+            card.innerHTML = `
+                <div class="inv-header">
+                    <span>${item.codigo}</span>
+                    <span>Almacén: ${item.almacen}</span>
+                </div>
+                <div class="inv-body">
+                    <div class="inv-title">${item.nombre}</div>
+                    
+                    <div class="inv-stats">
+                        <div class="stat-group"><span class="stat-label">Categoría</span><span class="stat-val">${item.categoria}</span></div>
+                        <div class="stat-group"><span class="stat-label">Desc. Máx. Permitido</span><span class="stat-val">${item.desc}%</span></div>
+                    </div>
+
+                    <div class="stock-container">
+                        <div class="stat-group">
+                            <span class="stat-label">Costo Unit.</span>
+                            <span class="stat-val">${formatoSoles.format(item.costoUnitario)}</span>
+                        </div>
+                        <div class="stock-badge ${item.estadoClass}">
+                            <span class="material-icons-round" style="font-size: 16px;">${item.estadoIcon}</span>
+                            Stock: ${item.stockActual.toFixed(2)}
+                        </div>
+                        <div class="stat-group" style="text-align: right;">
+                            <span class="stat-label">Precio Unit.</span>
+                            <span class="stat-val" style="color: var(--p-interactive);">${formatoSoles.format(item.precioUnitario)}</span>
+                        </div>
+                    </div>
+
+                    <div class="financial-details">
+                        <span>Costo Inv: <strong>${formatoSoles.format(Math.max(0, item.costoTotal))}</strong></span>
+                        <span>Valorización: <strong style="color: var(--p-interactive);">${formatoSoles.format(Math.max(0, item.precioTotal))}</strong></span>
+                    </div>
+                </div>
+            `;
+            contenedor.appendChild(card);
+        });
+
+        document.getElementById('kpi-costo').innerText = formatoSoles.format(sumaCosto);
+        document.getElementById('kpi-precio').innerText = formatoSoles.format(sumaPrecio);
+        document.getElementById('kpi-cantidad').innerText = datos.length;
+    }
+
+    // ==========================================
+    // SISTEMA DE BÚSQUEDA EN MEMORIA
+    // ==========================================
+    function aplicarFiltros() {
+        const valCodigo = document.getElementById('filtro-codigo').value.toLowerCase().trim();
+        const valNombre = document.getElementById('filtro-nombre').value.toLowerCase().trim();
+        const valCat = document.getElementById('filtro-cat').value.toLowerCase().trim();
+
+        datosFiltrados = globalInventario.filter(item => {
+            const matchCodigo = (item.codigo || "").toString().toLowerCase().includes(valCodigo);
+            const matchNombre = (item.nombre || "").toString().toLowerCase().includes(valNombre);
+            const matchCat = (item.categoria || "").toString().toLowerCase().includes(valCat);
+            
+            return matchCodigo && matchNombre && matchCat;
+        });
+
+        renderizarInventario(datosFiltrados);
+    }
+
+    function limpiarFiltros() {
+        document.getElementById('filtro-codigo').value = '';
+        document.getElementById('filtro-nombre').value = '';
+        document.getElementById('filtro-cat').value = '';
+        aplicarFiltros();
+    }
+
+    // ==========================================
+    // UTILIDAD: EXPORTAR INVENTARIO A EXCEL
+    // ==========================================
+    function exportarDatos() {
+        if(datosFiltrados.length === 0) {
+            return mostrarAlerta("Inventario Vacío", "No hay datos en pantalla para exportar a Excel.", "warning");
+        }
+
+        // Mapear solo los datos que se están mostrando actualmente (útil si filtraron por una categoría)
+        const datosExcel = datosFiltrados.map(row => ({
+            "Código SKU": row.codigo,
+            "Nombre del Producto": row.nombre,
+            "Categoría": row.categoria,
+            "Almacén": row.almacen,
+            "Stock Actual": parseFloat(Number(row.stockActual || 0).toFixed(2)),
+            "Costo Unitario (PEN)": parseFloat(Number(row.costoUnitario || 0).toFixed(2)),
+            "Precio Unitario (PEN)": parseFloat(Number(row.precioUnitario || 0).toFixed(2)),
+            "Costo Total Inventario": parseFloat(Math.max(0, row.costoTotal || 0).toFixed(2)),
+            "Valorización Total": parseFloat(Math.max(0, row.precioTotal || 0).toFixed(2))
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(datosExcel);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Stock Actual");
+
+        XLSX.writeFile(workbook, `Reporte_Stock_MEF_${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
+    // ==========================================
+    // INICIALIZACIÓN Y GUARDIÁN DE SESIÓN
+    // ==========================================
+    window.onload = () => {
+        // --- INICIO DEL GUARDIÁN ---
+        const sesionStr = localStorage.getItem('isa_sesion');
+        
+        if (!sesionStr) {
+            window.location.href = 'login.html'; 
+            return;
+        }
+
+        const sesion = JSON.parse(sesionStr);
+        
+        // Control RBAC: Vendedores NO ven el inventario general (costos, stock total)
+        if (sesion.rol === 'Vendedor') {
+            alert('Acceso Denegado: Su rol de Vendedor no tiene permisos para acceder al Inventario General y Costos de M.E.F.');
+            window.location.href = 'RegistroSalidas.html';
+            return;
+        }
+        // --- FIN DEL GUARDIÁN ---
+
+        const hoy = new Date();
+        document.getElementById('fecha-generado').innerText = `Generado: ${hoy.toLocaleDateString('es-PE')}`;
+        
+        cargarInventarioNube(); // Dispara la carga de datos desde Firebase
+    };
+</script>
+
+</body>
+</html>

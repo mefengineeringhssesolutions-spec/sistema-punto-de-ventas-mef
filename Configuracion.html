@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MME - Configuración del Sistema</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="seguridad.js"></script>
+    
+    <style>
+        /* ==========================================
+           SISTEMA DE DISEÑO POLARIS (APP NATIVA)
+           ========================================== */
+        :root {
+            --p-surface: #ffffff;
+            --p-background: #f4f6f8;
+            --p-text: #202223;
+            --p-text-subdued: #6d7175;
+            --p-border: #c9cccf;
+            --p-border-subdued: #1e293b;
+            --p-action-primary: #1e293b;
+            --p-action-primary-hover: #0f172a;
+            --p-interactive: #2c6ecb;
+            --p-critical: #d82c0d;
+            --p-warning: #b98900;
+            --p-success: #108043;
+            --p-shadow-card: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+            --p-shadow-bar: 0 -4px 10px rgba(0,0,0,0.05);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent;}
+        
+        body { 
+            background-color: var(--p-background); color: var(--p-text); height: 100vh; width: 100vw;
+            overflow: hidden; display: flex; flex-direction: column;
+        }
+
+        .top-fixed-section { flex-shrink: 0; background: var(--p-background); z-index: 10; }
+        .polaris-header {
+            background-color: #1e293b; padding: 12px 20px; display: grid; grid-template-columns: 1fr auto 1fr;
+            align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .polaris-header h1 { font-size: 16px; font-weight: 600; color: #ffffff; text-align: center; letter-spacing: 0.5px;}
+        .icon-btn { color: white; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05); padding: 4px; border-radius: 6px;}
+        .icon-btn:hover { background: rgba(255,255,255,0.15); transform: scale(1.05); }
+
+        .system-info { display: flex; justify-content: center; align-items: center; background: var(--p-surface); padding: 8px 20px; font-size: 12px; color: var(--p-text-subdued); border-bottom: 1px solid var(--p-border); }
+
+        .scrollable-list { flex-grow: 1; overflow-y: auto; padding: 20px; padding-bottom: 90px; }
+        .scrollable-list::-webkit-scrollbar { width: 6px; }
+        .scrollable-list::-webkit-scrollbar-thumb { background: var(--p-border); border-radius: 4px; }
+
+        .form-container { max-width: 750px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 20px;}
+        .form-section { background: var(--p-surface); padding: 24px; border-radius: 12px; box-shadow: var(--p-shadow-card); border: 1px solid var(--p-border);}
+        
+        .section-title { font-size: 15px; font-weight: 700; color: var(--p-action-primary); margin-bottom: 16px; display: flex; align-items: center; gap: 8px; border-bottom: 2px solid #f0f2f4; padding-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px;}
+        
+        .form-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+        @media (min-width: 600px) { .form-grid { grid-template-columns: 1fr 1fr; } }
+        .full-width { grid-column: 1 / -1; }
+
+        .polaris-field { display: flex; flex-direction: column; gap: 6px; }
+        .polaris-label { font-size: 12px; font-weight: 700; color: var(--p-text-subdued); text-transform: uppercase; letter-spacing: 0.5px;}
+        .polaris-input-wrapper { position: relative; display: flex; align-items: center; width: 100%; }
+        .prefix { position: absolute; left: 12px; color: var(--p-text-subdued); font-size: 18px; }
+        .has-prefix { padding-left: 38px !important; }
+        
+        .polaris-input { width: 100%; padding: 10px 12px; border: 1px solid var(--p-border); border-radius: 8px; font-size: 14px; color: var(--p-text); background-color: var(--p-background); transition: all 0.2s ease; height: 44px; font-weight: 500; }
+        .polaris-input:focus { outline: none; background-color: var(--p-surface); border-color: var(--p-interactive); box-shadow: 0 0 0 3px rgba(44, 110, 203, 0.15); }
+
+        .catalog-container { border: 1px solid var(--p-border); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; background: #fafbfb;}
+        .catalog-header { display: flex; padding: 8px; background: var(--p-surface); border-bottom: 1px solid var(--p-border); gap: 8px;}
+        .catalog-header input { flex-grow: 1; border: 1px solid var(--p-border); border-radius: 6px; padding: 8px 12px; font-size: 13px; outline: none;}
+        .catalog-header input:focus { border-color: var(--p-interactive); }
+        .catalog-header button { background: var(--p-interactive); color: white; border: none; border-radius: 6px; padding: 0 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center;}
+        .catalog-header button:hover { background: #1f57a4; }
+        
+        .catalog-list { max-height: 180px; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
+        .catalog-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border-bottom: 1px solid #f0f2f4; font-size: 13px; font-weight: 600; color: var(--p-text);}
+        .catalog-item:last-child { border-bottom: none; }
+        .catalog-item .btn-delete { color: var(--p-critical); cursor: pointer; padding: 4px; border-radius: 4px; transition: 0.2s; display: flex; align-items: center;}
+        .catalog-item .btn-delete:hover { background: #fef2f2; }
+
+        .btn-backup { width: 100%; padding: 14px; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--p-border); transition: all 0.2s; text-transform: uppercase; letter-spacing: 0.5px; }
+        .btn-backup.export { background: #f0fdf4; color: var(--p-success); border-color: #bbf7d0; }
+        .btn-backup.export:hover { background: #dcfce7; transform: translateY(-1px);}
+        .btn-backup.import { background: #f0f9ff; color: var(--p-interactive); border-color: #bae6fd; }
+        .btn-backup.import:hover { background: #e0f2fe; transform: translateY(-1px);}
+        .btn-backup.danger { background: #fef2f2; color: var(--p-critical); border-color: #fecaca; margin-top: 10px;}
+        .btn-backup.danger:hover { background: #fee2e2; }
+
+        .polaris-bottom-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--p-surface); padding: 16px 20px; box-shadow: var(--p-shadow-bar); display: flex; justify-content: flex-end; align-items: center; z-index: 100; border-top: 1px solid var(--p-border); }
+
+        .polaris-btn-primary { background-color: var(--p-action-primary); color: white; border: 1px solid transparent; padding: 14px 24px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; width: 100%; max-width: 750px; margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px; text-transform: uppercase; letter-spacing: 1px; }
+        .polaris-btn-primary:hover { background-color: var(--p-action-primary-hover); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);}
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(30, 41, 59, 0.85); display: none; justify-content: center; align-items: center; z-index: 1000; opacity: 0; animation: fadeIn 0.2s forwards; padding: 20px;}
+        .modal-content { background: var(--p-surface); width: 100%; max-width: 400px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; transform: scale(0.95); animation: scaleUp 0.2s forwards; }
+        .modal-header { padding: 20px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; font-size: 18px; font-weight: 800; border-bottom: 1px solid #f0f2f4; }
+        .modal-body { padding: 24px 20px; color: var(--p-text-subdued); font-size: 14px; line-height: 1.5; text-align: center; }
+        .modal-footer { padding: 16px 20px; background: #f8fafc; border-top: 1px solid var(--p-border); display: flex; justify-content: center; gap: 12px;}
+        
+        .modal-header.error { color: var(--p-critical); } .modal-header.warning { color: var(--p-warning); } .modal-header.success { color: var(--p-success); } .modal-header.info { color: var(--p-interactive); }
+        .modal-header .material-icons-outlined { font-size: 48px; }
+        
+        @keyframes fadeIn { to { opacity: 1; } } @keyframes scaleUp { to { transform: scale(1); } }
+
+        .polaris-toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; display: none; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.15); align-items: center; gap: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="top-fixed-section">
+        <header class="polaris-header">
+            <div style="display: flex; justify-content: flex-start;"></div>
+            <h1>CONFIGURACIÓN DEL SISTEMA</h1>
+            <div style="display: flex; justify-content: flex-end;">
+                <span class="material-icons-outlined icon-btn" onclick="window.location.href='Control.html'" title="Volver al Panel" style="font-size: 24px;">settings</span>
+            </div>
+        </header>
+        <div class="system-info">
+            <span> MME ENGINEERING & SOLUCIONES | v2.0 (Cloud)</span>
+        </div>
+    </div>
+
+    <div class="scrollable-list">
+        <div class="form-container">
+            <form id="form-config" onsubmit="event.preventDefault(); guardarConfiguracion();">
+                
+                <div class="form-section">
+                    <div class="section-title"><span class="material-icons-outlined">storefront</span> Perfil del Negocio</div>
+                    
+                    <div class="polaris-field" style="margin-bottom: 16px;">
+                        <label class="polaris-label">Razón Social o Nombre Comercial</label>
+                        <div class="polaris-input-wrapper">
+                            <span class="material-icons-outlined prefix">business</span>
+                            <input type="text" id="cfg-empresa" class="polaris-input has-prefix" required placeholder="Ej. MME ENGINEERING..." oninput="this.value = this.value.toUpperCase()">
+                        </div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="polaris-field">
+                            <label class="polaris-label">RUC / DNI</label>
+                            <div class="polaris-input-wrapper">
+                                <span class="material-icons-outlined prefix">badge</span>
+                                <input type="text" id="cfg-ruc" class="polaris-input has-prefix" required placeholder="Número de RUC" maxlength="11" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                            </div>
+                        </div>
+                        <div class="polaris-field">
+                            <label class="polaris-label">Teléfono / WhatsApp</label>
+                            <div class="polaris-input-wrapper">
+                                <span class="material-icons-outlined prefix">call</span>
+                                <input type="tel" id="cfg-telefono" class="polaris-input has-prefix" placeholder="Ej. 987654321" maxlength="9" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+                            </div>
+                        </div>
+                        <div class="polaris-field full-width">
+                            <label class="polaris-label">Dirección Fiscal / Ubicación</label>
+                            <div class="polaris-input-wrapper">
+                                <span class="material-icons-outlined prefix">location_on</span>
+                                <input type="text" id="cfg-direccion" class="polaris-input has-prefix" placeholder="Ubicación del negocio">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title"><span class="material-icons-outlined">category</span> Catálogos e Inventario</div>
+                    <p style="font-size: 12px; color: var(--p-text-subdued); margin-bottom: 16px;">
+                        Añade las opciones que aparecerán en los menús desplegables al momento de registrar nuevos ingresos de mercadería.
+                    </p>
+
+                    <div class="form-grid">
+                        <div class="polaris-field">
+                            <label class="polaris-label">Almacenes / Tiendas</label>
+                            <div class="catalog-container">
+                                <div class="catalog-header">
+                                    <input type="text" id="input-almacen" placeholder="Ej. Tienda Principal" oninput="this.value = this.value.toUpperCase()" onkeypress="if(event.key === 'Enter'){event.preventDefault(); gestionarCatalogo('add', 'almacenes');}">
+                                    <button type="button" onclick="gestionarCatalogo('add', 'almacenes')"><span class="material-icons-outlined">add</span></button>
+                                </div>
+                                <ul class="catalog-list" id="lista-almacenes"></ul>
+                            </div>
+                        </div>
+
+                        <div class="polaris-field">
+                            <label class="polaris-label">Categorías de Productos</label>
+                            <div class="catalog-container">
+                                <div class="catalog-header">
+                                    <input type="text" id="input-categoria" placeholder="Ej. Ferretería, Abarrotes..." oninput="this.value = this.value.toUpperCase()" onkeypress="if(event.key === 'Enter'){event.preventDefault(); gestionarCatalogo('add', 'categorias');}">
+                                    <button type="button" onclick="gestionarCatalogo('add', 'categorias')"><span class="material-icons-outlined">add</span></button>
+                                </div>
+                                <ul class="catalog-list" id="lista-categorias"></ul>
+                            </div>
+                        </div>
+
+                        <div class="polaris-field full-width">
+                            <label class="polaris-label">Unidades de Medida</label>
+                            <div class="catalog-container">
+                                <div class="catalog-header">
+                                    <input type="text" id="input-unidad" placeholder="Ej. KG, UNIDAD, CAJA..." oninput="this.value = this.value.toUpperCase()" onkeypress="if(event.key === 'Enter'){event.preventDefault(); gestionarCatalogo('add', 'unidades');}">
+                                    <button type="button" onclick="gestionarCatalogo('add', 'unidades')"><span class="material-icons-outlined">add</span></button>
+                                </div>
+                                <ul class="catalog-list" id="lista-unidades"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="section-title"><span class="material-icons-outlined">request_quote</span> Impuestos y Precios</div>
+                    
+                    <div class="form-grid">
+                        <div class="polaris-field">
+                            <label class="polaris-label">Impuesto IGV / IVA (%)</label>
+                            <div class="polaris-input-wrapper">
+                                <span class="material-icons-outlined prefix">account_balance</span>
+                                <input type="number" id="cfg-igv" class="polaris-input has-prefix" required min="0" step="0.1" placeholder="Ej. 18">
+                            </div>
+                        </div>
+                        
+                        <div class="polaris-field">
+                            <label class="polaris-label">Impuesto Bolsa (Moneda)</label>
+                            <div class="polaris-input-wrapper">
+                                <span class="material-icons-outlined prefix">shopping_bag</span>
+                                <input type="number" id="cfg-bolsa" class="polaris-input has-prefix" required min="0" step="0.10" placeholder="Ej. 0.50">
+                            </div>
+                        </div>
+
+                        <div class="polaris-field">
+                            <label class="polaris-label">Margen Precio Sugerido (%)</label>
+                            <div class="polaris-input-wrapper">
+                                <span class="material-icons-outlined prefix">trending_up</span>
+                                <input type="number" id="cfg-margen" class="polaris-input has-prefix" required min="0" step="1" placeholder="Ej. 30" title="Margen de ganancia aplicado automáticamente al costo del producto">
+                            </div>
+                        </div>
+
+                        <div class="polaris-field">
+                            <label class="polaris-label">Descuento Máx. Permitido (%)</label>
+                            <div class="polaris-input-wrapper">
+                                <span class="material-icons-outlined prefix">sell</span>
+                                <input type="number" id="cfg-descmax" class="polaris-input has-prefix" required min="1" max="100" placeholder="Ej. 50">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-section" style="background: #fafbfb; border: 1px dashed var(--p-border);">
+                    <div class="section-title" style="color: var(--p-interactive); border-bottom:none;"><span class="material-icons-outlined">cloud_sync</span> Respaldo de Base de Datos</div>
+                    <p style="font-size: 13px; color: var(--p-text-subdued); margin-bottom: 16px;">
+                        Descarga una copia de seguridad o restaura tu sistema al instante.
+                    </p>
+
+                    <div class="form-grid">
+                        <button type="button" class="btn-backup export" onclick="exportarBackup()">
+                            <span class="material-icons-outlined">cloud_download</span> Exportar Nube a PC/Móvil
+                        </button>
+                        
+                        <div>
+                            <input type="file" id="file-import" style="display: none;" accept=".json" onchange="procesarArchivoImportacion(event)">
+                            <button type="button" class="btn-backup import" onclick="document.getElementById('file-import').click()">
+                                <span class="material-icons-outlined">cloud_upload</span> Restaurar Sistema
+                            </button>
+                        </div>
+                    </div>
+
+                    <div style="border-top: 1px solid var(--p-border); margin-top: 20px; padding-top: 20px;">
+                        <button type="button" class="btn-backup danger" onclick="abrirModalLimpieza()">
+                            <span class="material-icons-outlined">delete_sweep</span> Borrar TODO el inventario y ventas
+                        </button>
+                    </div>
+                </div>
+
+            </form>
+        </div>
+    </div>
+
+    <div class="polaris-bottom-bar">
+        <button type="submit" form="form-config" class="polaris-btn-primary" id="btn-guardar-todo">
+            <span class="material-icons-outlined">save</span> GUARDAR TODA LA CONFIGURACIÓN
+        </button>
+    </div>
+
+    <div id="modal-alerta" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header" id="alerta-header">
+                <span class="material-icons-outlined" id="alerta-icon">error</span>
+                <span id="alerta-titulo">Atención</span>
+            </div>
+            <div class="modal-body" id="alerta-mensaje">Mensaje.</div>
+            <div class="modal-footer">
+                <button class="polaris-btn-primary" style="width: 100%; border-radius: 6px; padding: 10px;" onclick="cerrarAlerta()">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-danger" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header error">
+                <span class="material-icons-outlined">warning_amber</span>
+                <span>Borrado del Sistema</span>
+            </div>
+            <div class="modal-body">
+                ¿Está completamente seguro? Esta acción eliminará <strong>absolutamente todas las ventas (incluso las anuladas) y todo el inventario</strong> de Firebase para iniciar de cero.<br><br>Los usuarios y la configuración no serán afectados.
+            </div>
+            <div class="modal-footer" style="display:flex; justify-content:space-between;">
+                <button class="polaris-btn-primary" style="background:#f4f6f8; color:var(--p-text); border:1px solid var(--p-border); width: 48%; border-radius: 6px; padding: 10px;" onclick="cerrarModalLimpieza()">Cancelar</button>
+                <button class="polaris-btn-primary" style="background:var(--p-critical); width: 48%; border-radius: 6px; padding: 10px;" onclick="ejecutarLimpieza()">Sí, Borrar Todo</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="polaris-toast">
+        <span class="material-icons-outlined" style="font-size: 20px; color: var(--p-success);" id="toast-icon">check_circle</span>
+        <span id="toast-msg">Actualizado</span>
+    </div>
+
+<script>
+    // 1. INICIALIZAR FIREBASE
+    const firebaseConfig = {
+        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
+        authDomain: "pos-mef-ventas.firebaseapp.com",
+        projectId: "pos-mef-ventas",
+        storageBucket: "pos-mef-ventas.firebasestorage.app",
+        messagingSenderId: "704671042289",
+        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const configRef = db.collection('sistema').doc('configuracion'); 
+
+    // ==========================================
+    // GUARDIÁN DE SEGURIDAD (RBAC) E INICIALIZACIÓN
+    // ==========================================
+    window.onload = async () => {
+        const sesionStr = localStorage.getItem('isa_sesion');
+        if (!sesionStr) { window.location.href = 'login.html'; return; }
+        const sesion = JSON.parse(sesionStr);
+        if (sesion.rol !== 'Administrador' && sesion.rol !== 'Gerente') {
+            alert('Acceso Denegado: No tienes permisos de configuración.');
+            window.location.href = 'Control.html'; 
+            return;
+        }
+
+        try {
+            const doc = await configRef.get();
+            if (doc.exists) {
+                const data = doc.data();
+                cargarConfiguracionVisual(data);
+                listasCatalogos.almacenes = data.almacenes || [];
+                listasCatalogos.categorias = data.categorias || [];
+                listasCatalogos.unidades = data.unidades || [];
+            } else {
+                verificarSistemaNuevo();
+            }
+        } catch (error) {
+            console.error("Error leyendo Firebase", error);
+            mostrarAlerta("Error de Conexión", "No se pudo descargar la configuración de la nube.", "error");
+        }
+        
+        renderizarCatalogos();
+    };
+
+    function verificarSistemaNuevo() {
+        mostrarAlerta(
+            "Nuevo Sistema Detectado", 
+            "Bienvenido a MME Pro.\n\nEl sistema se encuentra en blanco. Para empezar a registrar productos, por favor ingrese los datos, agregue sus catálogos y presione 'Guardar'.", 
+            "info"
+        );
+    }
+
+    // ==========================================
+    // SISTEMA VISUAL DE ALERTAS
+    // ==========================================
+    function mostrarAlerta(titulo, mensaje, tipo = 'error') {
+        const modal = document.getElementById('modal-alerta');
+        const header = document.getElementById('alerta-header');
+        const icon = document.getElementById('alerta-icon');
+        
+        document.getElementById('alerta-titulo').innerText = titulo;
+        document.getElementById('alerta-mensaje').innerText = mensaje;
+        header.className = 'modal-header ' + tipo; 
+        
+        if(tipo === 'error') icon.innerText = 'gpp_bad';
+        else if (tipo === 'warning') icon.innerText = 'warning';
+        else if (tipo === 'success') icon.innerText = 'check_circle';
+        else if (tipo === 'info') icon.innerText = 'info'; 
+        
+        modal.style.display = 'flex';
+    }
+    function cerrarAlerta() { document.getElementById('modal-alerta').style.display = 'none'; }
+    function mostrarToast(mensaje) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-msg').innerText = mensaje;
+        toast.style.display = 'flex';
+        setTimeout(() => toast.style.display = 'none', 2500);
+    }
+
+    // ==========================================
+    // GESTOR DINÁMICO DE CATÁLOGOS
+    // ==========================================
+    const listasCatalogos = { almacenes: [], categorias: [], unidades: [] };
+
+    function renderizarCatalogos() {
+        Object.keys(listasCatalogos).forEach(tipo => {
+            const ul = document.getElementById(`lista-${tipo}`);
+            ul.innerHTML = '';
+            
+            if (listasCatalogos[tipo].length === 0) {
+                ul.innerHTML = `<li class="catalog-item" style="color: var(--p-text-subdued); justify-content: center; font-weight: 400; font-style: italic;">Sin registros</li>`;
+            } else {
+                listasCatalogos[tipo].forEach((item, index) => {
+                    ul.innerHTML += `
+                        <li class="catalog-item">
+                            ${item}
+                            <span class="material-icons-outlined btn-delete" title="Eliminar" onclick="gestionarCatalogo('delete', '${tipo}', '', ${index})">delete</span>
+                        </li>
+                    `;
+                });
+            }
+        });
+    }
+
+    window.gestionarCatalogo = async function(accion, tipo, valor = '', index = -1) {
+        if (accion === 'add') {
+            const input = document.getElementById(`input-${tipo === 'almacenes' ? 'almacen' : tipo === 'categorias' ? 'categoria' : 'unidad'}`);
+            const nuevoValor = input.value.trim().toUpperCase();
+            
+            if (!nuevoValor) return mostrarAlerta("Campo Vacío", "Escriba un nombre válido antes de agregar.", "warning");
+            if (listasCatalogos[tipo].includes(nuevoValor)) return mostrarAlerta("Duplicado", "Este elemento ya existe en la lista.", "warning");
+            
+            listasCatalogos[tipo].unshift(nuevoValor);
+            input.value = '';
+            mostrarToast("Añadido a la lista (No olvide Guardar Todo)");
+
+        } else if (accion === 'delete') {
+            if(!confirm("¿Desea eliminar esta opción del catálogo?")) return;
+            listasCatalogos[tipo].splice(index, 1);
+            mostrarToast("Eliminado de la lista");
+        }
+        renderizarCatalogos();
+        
+        try {
+            await configRef.set({ [tipo]: listasCatalogos[tipo] }, { merge: true });
+        } catch(e) { console.error("Fallo al guardar catálogo en la nube", e); }
+    };
+
+    // ==========================================
+    // LÓGICA DE CONFIGURACIÓN GLOBAL (FIREBASE)
+    // ==========================================
+    function cargarConfiguracionVisual(cfg) {
+        document.getElementById('cfg-empresa').value = cfg.empresa || "";
+        document.getElementById('cfg-ruc').value = cfg.ruc || "";
+        document.getElementById('cfg-telefono').value = cfg.telefono || "";
+        document.getElementById('cfg-direccion').value = cfg.direccion || "";
+        
+        document.getElementById('cfg-igv').value = cfg.igv !== undefined ? cfg.igv : "";
+        document.getElementById('cfg-bolsa').value = cfg.bolsa !== undefined ? cfg.bolsa : "";
+        document.getElementById('cfg-descmax').value = cfg.descmax !== undefined ? cfg.descmax : "";
+        document.getElementById('cfg-margen').value = cfg.margenSugerido !== undefined ? cfg.margenSugerido : "";
+        
+        localStorage.setItem('isa_config', JSON.stringify(cfg));
+        localStorage.setItem('isa_cat_almacenes', JSON.stringify(cfg.almacenes || []));
+        localStorage.setItem('isa_cat_categorias', JSON.stringify(cfg.categorias || []));
+        localStorage.setItem('isa_cat_unidades', JSON.stringify(cfg.unidades || []));
+    }
+
+    async function guardarConfiguracion() {
+        const btn = document.getElementById('btn-guardar-todo');
+        const nuevaConfig = {
+            empresa: document.getElementById('cfg-empresa').value.trim(),
+            ruc: document.getElementById('cfg-ruc').value.trim(),
+            telefono: document.getElementById('cfg-telefono').value.trim(),
+            direccion: document.getElementById('cfg-direccion').value.trim(),
+            igv: parseFloat(document.getElementById('cfg-igv').value) || 0,
+            bolsa: parseFloat(document.getElementById('cfg-bolsa').value) || 0,
+            descmax: parseFloat(document.getElementById('cfg-descmax').value) || 0,
+            margenSugerido: parseFloat(document.getElementById('cfg-margen').value) || 0,
+            almacenes: listasCatalogos.almacenes,
+            categorias: listasCatalogos.categorias,
+            unidades: listasCatalogos.unidades
+        };
+
+        if(!nuevaConfig.empresa || !nuevaConfig.ruc) {
+            return mostrarAlerta("Campos Requeridos", "La Razón Social y el RUC son obligatorios.", "warning");
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = `<span class="material-icons-outlined">cloud_upload</span> SUBIENDO A LA NUBE...`;
+
+        try {
+            await configRef.set(nuevaConfig);
+            cargarConfiguracionVisual(nuevaConfig); 
+            
+            btn.disabled = false;
+            btn.innerHTML = `<span class="material-icons-outlined">save</span> GUARDAR TODA LA CONFIGURACIÓN`;
+            mostrarAlerta("Éxito", "Toda la configuración ha sido guardada y sincronizada en Firebase.", "success");
+        } catch (error) {
+            btn.disabled = false;
+            btn.innerHTML = `<span class="material-icons-outlined">save</span> GUARDAR TODA LA CONFIGURACIÓN`;
+            mostrarAlerta("Error", "No se pudo subir la configuración a la nube. Revisa tu internet.", "error");
+        }
+    }
+
+    // ==========================================
+    // SISTEMA DE BACKUP TOTAL Y RESTAURACIÓN (ACTUALIZADO PARA MÓVIL Y PC)
+    // ==========================================
+    async function exportarBackup() {
+        mostrarToast("Compilando toda la base de datos...");
+        try {
+            const backup = { fechaRespaldo: new Date().toISOString() };
+
+            // 1. Descargar Configuración
+            const docConf = await configRef.get();
+            backup.configuracion = docConf.exists ? docConf.data() : {};
+
+            // 2. Descargar Productos
+            backup.productos = [];
+            const prodSnap = await db.collection('productos').get();
+            prodSnap.forEach(doc => backup.productos.push(doc.data()));
+
+            // 3. Descargar Ventas
+            backup.ventas = [];
+            const ventasSnap = await db.collection('ventas').get();
+            ventasSnap.forEach(doc => backup.ventas.push(doc.data()));
+
+            // 4. Descargar Clientes
+            backup.clientes = [];
+            const clientesSnap = await db.collection('clientes').get();
+            clientesSnap.forEach(doc => backup.clientes.push(doc.data()));
+
+            // Generar archivo JSON
+            const dataStr = JSON.stringify(backup, null, 2);
+            const fileName = `MME_Backup_${new Date().toISOString().split('T')[0]}.json`;
+            const file = new File([dataStr], fileName, { type: 'application/json' });
+
+            // TRUCO MÓVIL: Detectamos si el dispositivo permite compartir archivos nativamente (Android/iOS)
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({
+                    title: 'Respaldo Base de Datos MME',
+                    text: 'Archivo JSON con la copia de seguridad de todo el sistema.',
+                    files: [file]
+                });
+                mostrarToast("Respaldo enviado exitosamente.");
+            } else {
+                // SISTEMA PC: Si no es un celular, lo descarga como archivo normal
+                const url = URL.createObjectURL(file);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                mostrarToast("Copia de seguridad descargada exitosamente.");
+            }
+        } catch(e) {
+            console.error("Error en backup:", e);
+            mostrarAlerta("Error de Respaldo", "No se pudo generar o compartir el archivo de respaldo.", "error");
+        }
+    }
+
+    function procesarArchivoImportacion(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                mostrarToast("Restaurando datos a Firebase...");
+                
+                const promesasDeSubida = [];
+
+                // Restaurar Configuración
+                if (data.configuracion) {
+                    promesasDeSubida.push(configRef.set(data.configuracion));
+                }
+
+                // Restaurar Productos
+                if (data.productos && Array.isArray(data.productos)) {
+                    data.productos.forEach(p => {
+                        if (p.codigo) promesasDeSubida.push(db.collection('productos').doc(p.codigo).set(p));
+                    });
+                }
+
+                // Restaurar Ventas
+                if (data.ventas && Array.isArray(data.ventas)) {
+                    data.ventas.forEach(v => {
+                        if (v.id) promesasDeSubida.push(db.collection('ventas').doc(v.id).set(v));
+                    });
+                }
+
+                // Restaurar Clientes
+                if (data.clientes && Array.isArray(data.clientes)) {
+                    data.clientes.forEach(c => {
+                        if (c.dni) promesasDeSubida.push(db.collection('clientes').doc(c.dni).set(c));
+                    });
+                }
+
+                // Ejecutar todas las subidas de forma paralela sin límite de batch
+                await Promise.all(promesasDeSubida);
+                
+                mostrarAlerta("Restauración Exitosa", "Toda la información del archivo ha sido inyectada en la Nube correctamente.", "success");
+                
+                // Recargar para que los cambios surtan efecto en la vista actual
+                setTimeout(() => location.reload(), 2500);
+
+            } catch (error) {
+                console.error(error);
+                mostrarAlerta("Error de Archivo", "El archivo de respaldo está corrupto o no es válido para este sistema.", "error");
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    // ==========================================
+    // LIMPIEZA ABSOLUTA DEL SISTEMA (BORRADO TOTAL EN FIREBASE)
+    // ==========================================
+    function abrirModalLimpieza() { document.getElementById('modal-danger').style.display = 'flex'; }
+    function cerrarModalLimpieza() { document.getElementById('modal-danger').style.display = 'none'; }
+    
+    async function ejecutarLimpieza() {
+        cerrarModalLimpieza();
+        mostrarToast("Arrasando registros en la Nube...");
+        
+        try {
+            const promesasBorrado = [];
+
+            // 1. Obtener y preparar el borrado de TODOS los productos
+            const productosSnap = await db.collection('productos').get();
+            productosSnap.forEach(doc => promesasBorrado.push(doc.ref.delete()));
+
+            // 2. Obtener y preparar el borrado de TODAS las ventas (incluidas las anuladas)
+            const ventasSnap = await db.collection('ventas').get();
+            ventasSnap.forEach(doc => promesasBorrado.push(doc.ref.delete()));
+
+            // 3. Ejecutar el borrado masivo
+            await Promise.all(promesasBorrado);
+            
+            // Limpiar caché local
+            localStorage.removeItem('isa_ingresos_db'); 
+
+            mostrarAlerta("Sistema en Cero", "Todo el inventario y el historial completo de ventas han sido eliminados de la nube permanentemente.", "success");
+        } catch (error) {
+            console.error("Error al borrar el sistema:", error);
+            mostrarAlerta("Error Crítico", "Hubo un problema al intentar borrar los datos de la nube. Verifique su conexión.", "error");
+        }
+    }
+</script>
+</body>
+</html>

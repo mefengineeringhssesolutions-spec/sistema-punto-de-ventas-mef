@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>M.E.F. - Panel de Control</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="seguridad.js"></script>
+
+    <style>
+        /* ==========================================
+           SISTEMA DE DISEÑO POLARIS
+           ========================================== */
+        :root {
+            --p-surface: #ffffff; --p-background: #f4f6f8; --p-text: #202223; --p-text-subdued: #6d7175;
+            --p-border: #c9cccf; --p-border-subdued: #1e293b; --p-action-primary: #1e293b;
+            --p-action-primary-hover: #0f172a; --p-interactive: #2c6ecb; --p-danger: #d82c0d;
+            --p-shadow-card: 0 0 0 1px rgba(63, 63, 68, 0.05), 0 1px 3px 0 rgba(63, 63, 68, 0.15);
+            --p-shadow-hover: 0 0 0 1px rgba(63, 63, 68, 0.05), 0 5px 15px 0 rgba(0, 0, 0, 0.1);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; user-select: none; }
+        
+        body { background-color: var(--p-background); color: var(--p-text); height: 100vh; width: 100vw; overflow: hidden; display: flex; flex-direction: column; }
+
+        .polaris-header { background-color: #1e293b; padding: 16px 20px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; z-index: 100; border-bottom: 1px solid var(--p-border-subdued); flex-shrink: 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .polaris-header .brand { display: flex; align-items: center; justify-content: center; gap: 8px; color: white; }
+        .polaris-header .brand h1 { font-size: 16px; font-weight: 600; letter-spacing: 0.5px; text-align: center; text-transform: uppercase; }
+        .header-actions { display: flex; justify-content: flex-end; gap: 15px; color: white; }
+        .icon-btn { cursor: pointer; transition: opacity 0.2s, background 0.2s; display: flex; align-items: center; justify-content: center; padding: 6px; border-radius: 6px; }
+        .icon-btn:hover { background: rgba(255,255,255,0.1); }
+
+        .user-status-bar { background: var(--p-surface); padding: 10px 20px; display: flex; justify-content: center; align-items: center; border-bottom: 1px solid var(--p-border); box-shadow: 0 2px 4px rgba(0,0,0,0.05); font-size: 13px; color: var(--p-text-subdued); gap: 6px; }
+        .user-status-bar strong { color: var(--p-action-primary); }
+
+        .menu-container { flex-grow: 1; padding: 30px 20px; max-width: 900px; margin: 0 auto; width: 100%; overflow-y: auto; z-index: 10; }
+        .menu-container::-webkit-scrollbar { width: 0px; background: transparent; }
+
+        .menu-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        @media (min-width: 650px) { .menu-grid { grid-template-columns: repeat(3, 1fr); gap: 20px; } }
+        @media (min-width: 900px) { .menu-grid { grid-template-columns: repeat(4, 1fr); } }
+
+        .menu-btn { background: var(--p-surface); border: none; border-radius: 12px; padding: 24px 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; box-shadow: var(--p-shadow-card); cursor: pointer; transition: all 0.2s ease; text-decoration: none; color: var(--p-text); }
+        .menu-btn:hover { transform: translateY(-4px); box-shadow: var(--p-shadow-hover); color: var(--p-interactive); }
+        .menu-btn:active { transform: translateY(0); box-shadow: var(--p-shadow-card); }
+        .menu-btn .material-icons-outlined { font-size: 36px; color: var(--p-action-primary); transition: color 0.2s, transform 0.2s; }
+        .menu-btn:hover .material-icons-outlined { color: var(--p-interactive); transform: scale(1.1); }
+        .menu-btn span.label { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; }
+
+        .menu-btn.pos-highlight { background: var(--p-action-primary); color: white; }
+        .menu-btn.pos-highlight .material-icons-outlined { color: white; }
+        .menu-btn.pos-highlight:hover { background: var(--p-action-primary-hover); color: white; box-shadow: 0 8px 16px rgba(30, 41, 59, 0.3); }
+        .menu-btn.pos-highlight:hover .material-icons-outlined { color: white; }
+
+        .footer { text-align: center; padding: 15px 20px; font-size: 12px; color: var(--p-text-subdued); border-top: 1px solid var(--p-border); background: var(--p-surface); flex-shrink: 0; }
+        .footer strong { color: var(--p-text); }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(32, 34, 35, 0.8); display: none; justify-content: center; align-items: center; z-index: 1000; opacity: 0; animation: fadeIn 0.2s forwards; }
+        .modal-content { background: var(--p-surface); width: 90%; max-width: 350px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; transform: scale(0.95); animation: scaleUp 0.2s forwards; }
+        .modal-header { padding: 16px 20px; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; border-bottom: 1px solid var(--p-border); color: var(--p-danger); }
+        .modal-body { padding: 20px; color: var(--p-text); font-size: 14px; line-height: 1.5; }
+        .modal-footer { padding: 16px 20px; background: #fafbfb; border-top: 1px solid var(--p-border); display: flex; justify-content: space-between; gap: 10px;}
+        
+        .polaris-btn-outline { background: transparent; color: var(--p-text); border: 1px solid var(--p-border); padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; width: 100%; }
+        .polaris-btn-outline:hover { background: #f4f6f8; }
+        .polaris-btn-danger { background: var(--p-danger); color: white; border: 1px solid transparent; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; width: 100%; }
+        .polaris-btn-danger:hover { background: #b9250a; }
+
+        @keyframes fadeIn { to { opacity: 1; } }
+        @keyframes scaleUp { to { transform: scale(1); } }
+    </style>
+</head>
+<body>
+
+    <header class="polaris-header">
+        <div></div>
+        <div class="brand">
+            <span class="material-icons-outlined" style="color: #4ade80;">storefront</span>
+            <h1>PANEL ADMINISTRATIVO</h1>
+        </div>
+        <div class="header-actions">
+            <span class="material-icons-outlined icon-btn" onclick="abrirModalCerrarSesion()" title="Cerrar Sesión">logout</span>
+        </div>
+    </header>
+
+    <div class="user-status-bar">
+        <span class="material-icons-outlined" style="font-size: 16px;">account_circle</span>
+        Hola, <strong id="txt-usuario-activo">Cargando...</strong>
+    </div>
+
+    <main class="menu-container">
+        <div class="menu-grid">
+            
+            <button class="menu-btn pos-highlight" id="btn-pos" onclick="window.location.href='RegistroSalidas.html'">
+                <span class="material-icons-outlined">point_of_sale</span>
+                <span class="label">Punto de Venta</span>
+            </button>
+
+            <button class="menu-btn" id="btn-historial-ventas" onclick="window.location.href='BDBoletas.html'">
+                <span class="material-icons-outlined">receipt_long</span>
+                <span class="label">Historial Ventas</span>
+            </button>
+
+            <button class="menu-btn" id="btn-reg-ingreso" onclick="window.location.href='RegistroIngresos.html'">
+                <span class="material-icons-outlined">add_shopping_cart</span>
+                <span class="label">Registrar Ingreso</span>
+            </button>
+
+            <button class="menu-btn" id="btn-historial-ingreso" onclick="window.location.href='BDIngresos.html'">
+                <span class="material-icons-outlined">list_alt</span>
+                <span class="label">Historial Ingresos</span>
+            </button>
+
+            <button class="menu-btn" id="btn-inventario" onclick="window.location.href='BDInventario.html'">
+                <span class="material-icons-outlined">inventory_2</span>
+                <span class="label">Inventario General</span>
+            </button>
+
+            <button class="menu-btn" id="btn-clientes" onclick="window.location.href='BDCliente.html'">
+                <span class="material-icons-outlined">contact_page</span>
+                <span class="label">Clientes</span>
+            </button>
+
+            <button class="menu-btn" id="btn-personal" onclick="window.location.href='BDUsuarios.html'">
+                <span class="material-icons-outlined">badge</span>
+                <span class="label">Personal</span>
+            </button>
+
+            <button class="menu-btn" id="btn-analisis" onclick="window.location.href='Dashboard.html'">
+                <span class="material-icons-outlined">pie_chart</span>
+                <span class="label">Análisis de Negocio</span>
+            </button>
+
+            <button class="menu-btn" id="btn-config" onclick="window.location.href='Configuracion.html'">
+                <span class="material-icons-outlined">settings</span>
+                <span class="label">Configuración</span>
+            </button>
+
+        </div>
+    </main>
+
+    <footer class="footer">
+        &copy; 2026 <strong>M.E.F. ENGINEERING & HSSE SOLUTIONS</strong><br>
+        Todos los derechos reservados.
+    </footer>
+
+    <div id="modal-logout" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span class="material-icons-outlined">logout</span>
+                <h3>Cerrar Sesión</h3>
+            </div>
+            <div class="modal-body">
+                ¿Estás seguro de que deseas salir del sistema? Tendrás que volver a ingresar tus credenciales.
+            </div>
+            <div class="modal-footer">
+                <button class="polaris-btn-outline" onclick="cerrarModalLogout()">Cancelar</button>
+                <button class="polaris-btn-danger" onclick="ejecutarCerrarSesion()">Sí, salir</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. INICIALIZAR FIREBASE (Preparado para futuras lecturas en el Panel)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
+            authDomain: "pos-mef-ventas.firebaseapp.com",
+            projectId: "pos-mef-ventas",
+            storageBucket: "pos-mef-ventas.firebasestorage.app",
+            messagingSenderId: "704671042289",
+            appId: "1:704671042289:web:3f3b78992eb2863e25f750"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ==========================================
+        // GUARDIÁN DE SEGURIDAD (CONTROL DE ROLES)
+        // ==========================================
+        window.onload = () => {
+            const sesionStr = localStorage.getItem('isa_sesion');
+            
+            // Si intenta saltarse el login, lo regresamos a la fuerza
+            if (!sesionStr) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            const sesion = JSON.parse(sesionStr);
+            const rolActual = sesion.rol;
+            const nombreCorto = sesion.nombre.split(' ')[0]; 
+
+            document.getElementById('txt-usuario-activo').innerText = `${nombreCorto} (${rolActual})`;
+
+            // Permisos según el Rol en la Base de Datos
+            const permisos = {
+                "Administrador": [
+                    "btn-pos", "btn-historial-ventas", "btn-reg-ingreso", "btn-historial-ingreso", 
+                    "btn-inventario", "btn-clientes", "btn-personal", "btn-analisis", "btn-config"
+                ],
+                "Gerente": [
+                    "btn-pos", "btn-historial-ventas", "btn-reg-ingreso", "btn-historial-ingreso", 
+                    "btn-inventario", "btn-clientes", "btn-personal", "btn-analisis", "btn-config"
+                ],
+                "Logística": [
+                    "btn-reg-ingreso", "btn-historial-ingreso", "btn-inventario"
+                ],
+                "Vendedor": [
+                    "btn-pos", "btn-historial-ventas"
+                ]
+            };
+
+            const modulosPermitidos = permisos[rolActual] || [];
+            const todosLosBotones = [
+                "btn-pos", "btn-historial-ventas", "btn-reg-ingreso", "btn-historial-ingreso", 
+                "btn-inventario", "btn-clientes", "btn-personal", "btn-analisis", "btn-config"
+            ];
+
+            todosLosBotones.forEach(idBoton => {
+                const botonHtml = document.getElementById(idBoton);
+                if (botonHtml) {
+                    if (!modulosPermitidos.includes(idBoton)) {
+                        botonHtml.style.display = "none";
+                    }
+                }
+            });
+        };
+
+        // ==========================================
+        // LÓGICA DE MODALES
+        // ==========================================
+        function abrirModalCerrarSesion() {
+            document.getElementById('modal-logout').style.display = 'flex';
+        }
+
+        function cerrarModalLogout() {
+            document.getElementById('modal-logout').style.display = 'none';
+        }
+
+        function ejecutarCerrarSesion() {
+            localStorage.removeItem('isa_sesion'); 
+            window.location.href = 'login.html'; // Corregido: redirige al archivo de login
+        }
+    </script>
+
+</body>
+</html>

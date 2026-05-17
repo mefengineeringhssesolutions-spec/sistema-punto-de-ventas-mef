@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>M.E.F. - Historial de Ingresos</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="seguridad.js"></script>
+    <style>
+        /* ==========================================
+           SISTEMA DE DISEÑO POLARIS (Estilo Profesional)
+           ========================================== */
+        :root {
+            --primary: #1e293b; --secondary: #475569; --bg-body: #f8fafc; --surface: #ffffff;
+            --text-main: #0b0b0b; --text-muted: #5a6778; --border: #e2e8f0;
+            --success: #108043; --danger: #d82c0d; --danger-bg: #fef2f2;
+            --warning: #b98900; --accent: #2c6ecb;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-tap-highlight-color: transparent;}
+        
+        body { background-color: var(--bg-body); color: var(--text-main); height: 100vh; width: 100vw; overflow: hidden; display: flex; flex-direction: column; }
+
+        .top-fixed-section { flex-shrink: 0; background: var(--bg-body); z-index: 10; box-shadow: 0 4px 10px rgba(0,0,0,0.05); padding-bottom: 8px; }
+
+        .header { background-color: var(--primary); color: white; padding: 12px 20px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+        .header .icon-btn { color: white; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 4px; }
+        .header .icon-btn:hover { background: rgba(255,255,255,0.1); }
+        .header .logo { font-weight: 600; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px; text-align: center; }
+
+        .system-info { display: flex; justify-content: space-between; align-items: center; background: var(--surface); padding: 8px 20px; font-size: 12px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+
+        .dashboard-container { padding: 12px 20px 0; max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+        .kpi-wrapper { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+        .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.02); display: flex; flex-direction: column; gap: 2px; }
+        .kpi-card h3 { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;}
+        .kpi-card .value { font-size: 18px; font-weight: 800; }
+
+        .search-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .search-title { font-size: 12px; font-weight: 700; margin-bottom: 8px; color: var(--primary); display: flex; align-items: center; gap: 5px; }
+        .search-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .search-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text-main); background: var(--bg-body); transition: border 0.2s, box-shadow 0.2s; }
+        .search-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(30, 41, 59, 0.1); background: var(--surface);}
+        
+        .btn-limpiar { background: var(--surface); color: var(--text-muted); border: 1px solid var(--border); padding: 4px 12px; border-radius: 16px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 10px; margin-left: auto; width: fit-content; transition: all 0.2s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
+        .btn-limpiar:hover { background: var(--bg-body); color: var(--primary); border-color: var(--text-muted); }
+
+        .scrollable-list { flex-grow: 1; overflow-y: auto; padding-top: 10px; padding-bottom: 30px; }
+        .scrollable-list::-webkit-scrollbar { width: 0px; background: transparent; }
+
+        .entry-list { padding: 0 20px; display: flex; flex-direction: column; gap: 12px; max-width: 800px; margin: 0 auto; }
+        
+        .entry-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); display: flex; flex-direction: column; }
+        .entry-card.anulado { opacity: 0.6; filter: grayscale(100%); }
+        .entry-card.anulado .product-title { text-decoration: line-through; color: var(--danger); }
+        
+        .entry-card-header { background: #f8fafc; padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+        .entry-card-header .doc-id { font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 4px;}
+        .entry-card-header .date { color: var(--text-muted); font-weight: 500;}
+        
+        .entry-card-body { padding: 14px 16px; }
+        .product-title { font-size: 15px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; line-height: 1.3; word-break: break-word;}
+        .product-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+        
+        .financial-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: var(--bg-body); padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
+        .fin-item { display: flex; flex-direction: column; gap: 2px;}
+        .fin-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;}
+        .fin-value { font-size: 14px; font-weight: 700; color: var(--primary); }
+        .fin-value.costo { color: var(--danger); }
+        .fin-value.proyeccion { color: var(--success); }
+
+        .entry-card-footer { border-top: 1px solid var(--border); padding: 8px 16px; background: #fdfdfd; display: flex; justify-content: space-between; align-items: center; }
+        .badge-anulado { background: var(--danger-bg); color: var(--danger); font-size: 10px; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+        
+        .btn-delete { background: transparent; border: 1px solid transparent; color: var(--danger); cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 6px; margin-left: auto; }
+        .btn-delete:hover { background: var(--danger-bg); border-color: #fca5a5; }
+        .btn-delete:active { transform: scale(0.95); }
+
+        .fab-add { position: fixed; bottom: 25px; right: 25px; background: var(--primary); color: white; width: 56px; height: 56px; border-radius: 50%; display: flex; justify-content: center; align-items: center; box-shadow: 0 10px 15px -3px rgba(30, 41, 59, 0.4); border: none; cursor: pointer; transition: transform 0.2s; z-index: 900; }
+        .fab-add:active { transform: scale(0.90); }
+
+        .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); background: var(--surface); border-radius: 12px; border: 2px dashed var(--border); margin: 0 20px; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(32, 34, 35, 0.8); display: none; justify-content: center; align-items: center; z-index: 1000; opacity: 0; animation: fadeIn 0.2s forwards; }
+        .modal-content { background: var(--surface); width: 90%; max-width: 400px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; transform: scale(0.95); animation: scaleUp 0.2s forwards; }
+        .modal-header { padding: 16px 20px; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; border-bottom: 1px solid var(--border); }
+        .modal-body { padding: 20px; color: var(--text-main); font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+        .modal-footer { padding: 16px 20px; background: #fafbfb; border-top: 1px solid var(--border); display: flex; justify-content: space-between; gap: 10px;}
+        
+        .modal-header.warning { color: var(--warning); }
+        
+        .polaris-btn-primary { background-color: var(--primary); color: white; border: 1px solid transparent; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 1px 0 rgba(0,0,0,0.05); transition: background 0.2s; }
+        .polaris-btn-primary:hover { background-color: #0f172a; }
+
+        @keyframes fadeIn { to { opacity: 1; } } @keyframes scaleUp { to { transform: scale(1); } }
+
+        .polaris-toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #1e293b; color: white; padding: 12px 16px; border-radius: 4px; font-size: 14px; display: none; z-index: 1000; align-items: center; gap: 8px; }
+        
+        /* Spinner Loader */
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="top-fixed-section">
+        <header class="header">
+            <div style="display: flex; justify-content: flex-start; width: 32px;"></div>
+            <div class="logo">HISTORIAL DE INGRESOS</div>
+            <div style="display: flex; justify-content: flex-end;">
+                <span class="material-icons-outlined icon-btn" onclick="window.location.href='Control.html'" title="Volver al Panel" style="font-size: 24px;">exit_to_app</span>
+            </div>
+        </header>
+
+        <div class="system-info">
+            <span id="txt-fecha">Generado: --/--/----</span>
+            <span>N° Entradas Válidas: <strong id="txt-count" style="color: var(--accent);">0</strong></span>
+        </div>
+
+        <div class="dashboard-container">
+            <div class="kpi-wrapper">
+                <div class="kpi-card" style="border-top-color: var(--danger);">
+                    <h3>Inversión (Costo)</h3>
+                    <div class="value" id="kpi-total-costo" style="color: var(--danger);">S/ 0.00</div>
+                </div>
+                <div class="kpi-card" style="border-top-color: var(--success);">
+                    <h3>Valorización (Precio)</h3>
+                    <div class="value" id="kpi-total-valor" style="color: var(--success);">S/ 0.00</div>
+                </div>
+            </div>
+
+            <div class="search-box">
+                <div class="search-title">
+                    <span class="material-icons-round" style="font-size: 16px;">manage_search</span> Filtros de Búsqueda
+                </div>
+                <div class="search-grid">
+                    <input type="text" id="filtro-doc" class="search-input" placeholder="N° Factura/Boleta" onkeyup="aplicarFiltros()">
+                    <input type="date" id="filtro-fecha" class="search-input" onchange="aplicarFiltros()" title="Buscar por fecha">
+                    <input type="text" id="filtro-codigo" class="search-input" placeholder="Código SKU" onkeyup="aplicarFiltros()">
+                    <input type="text" id="filtro-nombre" class="search-input" placeholder="Nombre de Producto" onkeyup="aplicarFiltros()">
+                </div>
+                <button type="button" class="btn-limpiar" onclick="limpiarFiltros()">
+                    <span class="material-icons-outlined" style="font-size: 14px;">filter_alt_off</span> Limpiar Filtros
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="scrollable-list">
+        <div class="entry-list" id="entradas-container">
+            <div class="loader" id="loading-spinner"></div>
+        </div>
+    </div>
+
+    <button class="fab-add" onclick="window.location.href='RegistroIngresos.html'" title="Nueva Entrada">
+        <span class="material-icons-round" style="font-size: 28px;">add</span>
+    </button>
+
+    <div id="modal-confirm" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header warning">
+                <span class="material-icons-outlined">warning</span>
+                <h3>Confirmar Acción</h3>
+            </div>
+            <div class="modal-body" id="confirm-mensaje">¿Estás seguro de continuar?</div>
+            <div class="modal-footer">
+                <button class="polaris-btn-primary" style="background:#f4f6f8; color:var(--text-main); border:1px solid var(--border);" onclick="cerrarConfirmacion()">Cancelar</button>
+                <button class="polaris-btn-primary" style="background:var(--danger);" id="btn-confirm-action">Sí, Anular Ingreso</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="polaris-toast">
+        <span class="material-icons-outlined" style="font-size: 18px; color: #4ade80;" id="toast-icon">check_circle</span>
+        <span id="toast-msg">Operación exitosa</span>
+    </div>
+
+<script>
+    'use strict';
+
+    // 1. INICIALIZAR FIREBASE
+    const firebaseConfig = {
+        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
+        authDomain: "pos-mef-ventas.firebaseapp.com",
+        projectId: "pos-mef-ventas",
+        storageBucket: "pos-mef-ventas.firebasestorage.app",
+        messagingSenderId: "704671042289",
+        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // Variable global para almacenar los datos descargados de Firebase
+    let globalProductos = [];
+
+    let confirmCallback = null;
+
+    function mostrarConfirmacion(mensaje, callback) {
+        document.getElementById('confirm-mensaje').innerText = mensaje;
+        confirmCallback = callback;
+        document.getElementById('modal-confirm').style.display = 'flex';
+    }
+
+    function cerrarConfirmacion() {
+        document.getElementById('modal-confirm').style.display = 'none';
+        confirmCallback = null;
+    }
+
+    document.getElementById('btn-confirm-action').addEventListener('click', () => {
+        if (confirmCallback) confirmCallback();
+        cerrarConfirmacion();
+    });
+
+    function mostrarToast(mensaje) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-msg').innerText = mensaje;
+        toast.style.display = 'flex';
+        setTimeout(() => { toast.style.display = 'none'; }, 2500);
+    }
+
+    const formatoSoles = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' });
+
+    // ==========================================
+    // RENDERIZADO VISUAL
+    // ==========================================
+    function renderizarEntradas(datos) {
+        const contenedor = document.getElementById('entradas-container');
+        contenedor.innerHTML = '';
+        
+        let sumaCosto = 0;
+        let sumaValorizacion = 0;
+        let registrosActivos = 0;
+
+        if(datos.length === 0) {
+            contenedor.innerHTML = `
+                <div class="empty-state">
+                    <span class="material-icons-round" style="font-size: 40px; color: #cbd5e1;">inventory_2</span>
+                    <p style="margin-top: 10px; font-weight: 700; font-size: 14px; color: var(--primary);">Sin resultados</p>
+                    <p style="font-size: 12px; margin-top: 4px;">No hay registros en la base de datos o que coincidan con la búsqueda.</p>
+                </div>
+            `;
+            document.getElementById('kpi-total-costo').innerText = formatoSoles.format(0);
+            document.getElementById('kpi-total-valor').innerText = formatoSoles.format(0);
+            document.getElementById('txt-count').innerText = 0;
+            return;
+        }
+
+        datos.forEach((item) => {
+            const costoLote = parseFloat(item.costoTotalUSD || item.costoTotalPEN || item.costoTotal) || 0;
+            const cantidad = parseFloat(item.cant) || 0;
+            const precioSug = parseFloat(item.precioUnitarioPEN) || 0;
+            
+            const nombreSeguro = item.nombre || "SIN NOMBRE";
+            const codSeguro = item.cod || "SIN CODIGO";
+            const categoriaSegura = item.categoria || "N/A";
+            const almacenSeguro = item.almacen || "N/A";
+            
+            let fechaMostrada = item.fecha || "--/--/----";
+            if(fechaMostrada.includes('-')) {
+                const [yyyy, mm, dd] = fechaMostrada.split('-');
+                fechaMostrada = `${dd}/${mm}/${yyyy}`;
+            }
+            
+            if(!item.anulado) {
+                sumaCosto += costoLote;
+                sumaValorizacion += (precioSug * cantidad);
+                registrosActivos++;
+            }
+
+            const card = document.createElement('div');
+            card.className = `entry-card ${item.anulado ? 'anulado' : ''}`;
+            card.innerHTML = `
+                <div class="entry-card-header">
+                    <span class="doc-id"><span class="material-icons-outlined" style="font-size: 14px;">receipt_long</span> ${item.doc || "S/D"}</span>
+                    <span class="date">${fechaMostrada}</span>
+                </div>
+                
+                <div class="entry-card-body">
+                    <div class="product-title">${nombreSeguro}</div>
+                    <div class="product-meta">Cód: <strong>${codSeguro}</strong> | Cat: ${categoriaSegura} | Alm: ${almacenSeguro}</div>
+                    
+                    <div class="financial-grid">
+                        <div class="fin-item" style="grid-column: span 2; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+                            <span class="fin-label">Cant. Ingresada</span>
+                            <span class="fin-value" style="color: var(--primary);">${cantidad} <span style="font-size:11px; color:var(--text-muted);">${item.unidad || 'UND'}</span></span>
+                        </div>
+                        <div class="fin-item">
+                            <span class="fin-label">Costo Lote</span>
+                            <span class="fin-value costo">${formatoSoles.format(costoLote)}</span>
+                        </div>
+                        <div class="fin-item" style="text-align: right;">
+                            <span class="fin-label">Precio Unidad</span>
+                            <span class="fin-value proyeccion">${formatoSoles.format(precioSug)}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="entry-card-footer">
+                    ${item.anulado 
+                        ? `<span class="badge-anulado">REGISTRO ANULADO</span>` 
+                        : `<button class="btn-delete" onclick="anularEntrada('${item.cod}')" title="Anular este registro de la nube">
+                               <span class="material-icons-outlined" style="font-size: 16px;">block</span> Anular
+                           </button>`
+                    }
+                </div>
+            `;
+            contenedor.appendChild(card);
+        });
+
+        document.getElementById('kpi-total-costo').innerText = formatoSoles.format(sumaCosto);
+        document.getElementById('kpi-total-valor').innerText = formatoSoles.format(sumaValorizacion);
+        document.getElementById('txt-count').innerText = registrosActivos;
+    }
+
+    // ==========================================
+    // BÚSQUEDA Y FILTROS (EN MEMORIA)
+    // ==========================================
+    function aplicarFiltros() {
+        const valDoc = document.getElementById('filtro-doc').value.toLowerCase().trim();
+        let valFecha = document.getElementById('filtro-fecha').value; 
+        const valCodigo = document.getElementById('filtro-codigo').value.toLowerCase().trim();
+        const valNombre = document.getElementById('filtro-nombre').value.toLowerCase().trim();
+
+        const datosFiltrados = globalProductos.filter(item => {
+            const matchDoc = (item.doc || "").toString().toLowerCase().includes(valDoc);
+            const matchCodigo = (item.cod || "").toString().toLowerCase().includes(valCodigo);
+            const matchNombre = (item.nombre || "").toString().toLowerCase().includes(valNombre);
+            
+            let matchFecha = true;
+            if (valFecha !== "") { matchFecha = (item.fecha === valFecha); }
+            
+            return matchDoc && matchFecha && matchCodigo && matchNombre;
+        });
+
+        renderizarEntradas(datosFiltrados);
+    }
+
+    function limpiarFiltros() {
+        document.getElementById('filtro-doc').value = '';
+        document.getElementById('filtro-fecha').value = '';
+        document.getElementById('filtro-codigo').value = '';
+        document.getElementById('filtro-nombre').value = '';
+        aplicarFiltros();
+    }
+
+    // ==========================================
+    // ANULACIÓN EN LA NUBE FIREBASE
+    // ==========================================
+    function anularEntrada(codigoProducto) {
+        mostrarConfirmacion(
+            "¿Está seguro que desea ANULAR este ingreso?\n\nEl registro pasará a estado inactivo en Firebase y dejará de sumar dinero y stock en el inventario general.",
+            async () => {
+                mostrarToast("Anulando en la nube...");
+                try {
+                    // Actualizar en Firebase
+                    await db.collection('productos').doc(codigoProducto).update({
+                        anulado: true
+                    });
+
+                    // Actualizar el array local para no tener que recargar toda la página
+                    globalProductos = globalProductos.map(item => {
+                        if(item.cod === codigoProducto) { item.anulado = true; }
+                        return item;
+                    });
+                    
+                    aplicarFiltros(); // Recarga la vista con los KPIs recalculados
+                    mostrarToast("Ingreso anulado correctamente.");
+                } catch (error) {
+                    console.error("Error al anular:", error);
+                    alert("Hubo un error al intentar anular el producto. Revise su conexión.");
+                }
+            }
+        );
+    }
+
+    // ==========================================
+    // DESCARGAR DATOS DESDE FIREBASE AL INICIAR
+    // ==========================================
+    window.onload = async () => {
+        // --- INICIO DEL GUARDIÁN ---
+        const sesionStr = localStorage.getItem('isa_sesion');
+        
+        if (!sesionStr) {
+            window.location.href = 'login.html'; 
+            return;
+        }
+
+        const sesion = JSON.parse(sesionStr);
+        if (sesion.rol === 'Vendedor') {
+            alert('Acceso Denegado: Su rol de Vendedor no tiene permisos para ver el historial de compras de la empresa.');
+            window.location.href = 'Control.html';
+            return;
+        }
+        // --- FIN DEL GUARDIÁN ---
+
+        const hoy = new Date();
+        document.getElementById('txt-fecha').innerHTML = `Generado: <strong>${hoy.toLocaleDateString('es-PE')}</strong>`;
+        
+        try {
+            // Descargar productos desde Firebase ordenados por fecha
+            const snapshot = await db.collection('productos').orderBy('fecha', 'desc').get();
+            
+            globalProductos = [];
+            snapshot.forEach(doc => {
+                globalProductos.push(doc.data());
+            });
+
+            renderizarEntradas(globalProductos);
+        } catch (error) {
+            console.error("Error descargando productos de Firebase:", error);
+            document.getElementById('entradas-container').innerHTML = `
+                <div class="empty-state" style="color: var(--danger); border-color: var(--danger);">
+                    <span class="material-icons-round" style="font-size: 40px;">cloud_off</span>
+                    <p style="margin-top: 10px; font-weight: 700;">Error de Conexión</p>
+                    <p style="font-size: 12px; margin-top: 4px;">No se pudo conectar a la base de datos en la nube.</p>
+                </div>
+            `;
+        }
+    };
+</script>
+
+</body>
+</html>

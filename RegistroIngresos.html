@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>M.E.F. - Registro de Ingreso</title>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="seguridad.js"></script>
+    
+    <style>
+        /* ==========================================
+           SISTEMA DE DISEÑO POLARIS
+           ========================================== */
+        :root {
+            --p-surface: #ffffff; --p-background: #f4f6f8; --p-text: #202223; --p-text-subdued: #6d7175;
+            --p-border: #c9cccf; --p-border-subdued: #1e293b; --p-action-primary: #1e293b;
+            --p-action-primary-hover: #0f172a; --p-action-primary-pressed: #020617;
+            --p-interactive: #2c6ecb; --p-critical: #d82c0d; --p-warning: #b98900; --p-success: #108043;
+            --p-shadow-card: 0 0 0 1px rgba(63, 63, 68, 0.05), 0 1px 3px 0 rgba(63, 63, 68, 0.15);
+            --p-shadow-bar: 0 -1px 3px 0 rgba(63, 63, 68, 0.05), 0 -1px 2px 0 rgba(63, 63, 68, 0.15);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--p-background); color: var(--p-text); padding-bottom: 90px; }
+
+        .polaris-header { background-color: #1e293b; padding: 16px 20px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; position: sticky; top: 0; z-index: 100; border-bottom: 1px solid var(--p-border-subdued); }
+        .polaris-header h1 { font-size: 18px; font-weight: 600; color: #ffffff; line-height: 1.2; text-align: center; text-transform: uppercase; }
+        .icon-btn { color: white; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; padding: 4px; border-radius: 4px; }
+        .icon-btn:hover { background: rgba(255,255,255,0.1); }
+        .icon-btn:active { background: rgba(255,255,255,0.2); }
+
+        .form-layout { padding: 16px; max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+        .polaris-card { background: var(--p-surface); border-radius: 8px; box-shadow: var(--p-shadow-card); overflow: hidden; }
+        .polaris-card-header { padding: 16px 16px 12px 16px; font-size: 15px; font-weight: 600; color: var(--p-text); }
+        .polaris-card-body { padding: 0 16px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
+
+        .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+        .full-width { grid-column: 1 / -1; }
+
+        .polaris-field { display: flex; flex-direction: column; gap: 4px; }
+        .polaris-label { font-size: 13px; font-weight: 500; color: var(--p-text); line-height: 1.2;}
+        .polaris-input-wrapper { position: relative; display: flex; align-items: center; width: 100%; }
+        
+        .polaris-input { width: 100%; padding: 6px 10px; border: 1px solid var(--p-border); border-radius: 4px; font-size: 14px; color: var(--p-text); background-color: var(--p-surface); transition: border-color 0.2s, box-shadow 0.2s; height: 34px; }
+        .polaris-input:focus { outline: none; border-color: var(--p-action-primary); box-shadow: 0 0 0 1px var(--p-action-primary); }
+        .polaris-input:disabled, .polaris-input[readonly] { background-color: #fafbfb; color: var(--p-text-subdued); border-color: var(--p-border-subdued); cursor: not-allowed; }
+
+        #in-nombre, #in-codigo, #in-documento { text-transform: uppercase; }
+
+        .prefix { position: absolute; left: 10px; color: var(--p-text-subdued); font-size: 13px; }
+        .has-prefix { padding-left: 28px !important; } 
+        
+        .action-icon { position: absolute; right: 2px; background: none; border: none; color: var(--p-text-subdued); cursor: pointer; padding: 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+        .action-icon:active { background: #f0f2f4; color: var(--p-text); }
+
+        .polaris-bottom-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--p-surface); padding: 12px 20px; box-shadow: var(--p-shadow-bar); display: flex; justify-content: space-between; align-items: center; z-index: 100; }
+        .price-summary { display: flex; flex-direction: column; }
+        .price-summary span { font-size: 11px; color: var(--p-text-subdued); text-transform: uppercase; letter-spacing: 0.5px;}
+        .price-summary strong { font-size: 16px; font-weight: 600; color: var(--p-action-primary); }
+
+        .polaris-btn-primary { background-color: var(--p-action-primary); color: white; border: 1px solid transparent; padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 1px 0 rgba(0,0,0,0.05); transition: background 0.2s; height: 38px; }
+        .polaris-btn-primary:hover { background-color: var(--p-action-primary-hover); }
+        .polaris-btn-primary:active { background-color: var(--p-action-primary-pressed); box-shadow: inset 0 1px 1px rgba(0,0,0,0.1); }
+        .polaris-btn-primary:disabled { background-color: var(--p-border-subdued); cursor: not-allowed; opacity: 0.7;}
+
+        .fab-container { position: fixed; bottom: 85px; right: 16px; display: flex; flex-direction: column; gap: 12px; z-index: 90; }
+        .fab-button { color: white; border: none; border-radius: 50%; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); cursor: pointer; transition: transform 0.2s, background 0.2s; }
+        .fab-button:active { transform: scale(0.95); }
+        .fab-template { background-color: var(--p-interactive); } .fab-template:hover { background-color: #1f5199; }
+        .fab-import { background-color: #108043; margin: 0; } .fab-import:hover { background-color: #0b5c30; }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(32, 34, 35, 0.8); display: none; justify-content: center; align-items: center; z-index: 1000; opacity: 0; animation: fadeIn 0.2s forwards; }
+        .modal-content { background: var(--p-surface); width: 90%; max-width: 400px; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; transform: scale(0.95); animation: scaleUp 0.2s forwards; }
+        .modal-header { padding: 16px 20px; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; border-bottom: 1px solid var(--p-border); }
+        .modal-body { padding: 20px; color: var(--p-text); font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+        .modal-footer { padding: 16px 20px; background: #fafbfb; border-top: 1px solid var(--p-border); display: flex; justify-content: flex-end; gap: 10px;}
+        
+        .modal-header.error { color: var(--p-critical); } .modal-header.warning { color: var(--p-warning); } .modal-header.success { color: var(--p-success); } .modal-header.info { color: var(--p-interactive); }
+        @keyframes fadeIn { to { opacity: 1; } } @keyframes scaleUp { to { transform: scale(1); } }
+
+        .polaris-toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); background: #202223; color: white; padding: 12px 16px; border-radius: 4px; font-size: 14px; display: none; z-index: 1000; box-shadow: 0 2px 4px rgba(0,0,0,0.1); align-items: center; gap: 8px; }
+    </style>
+</head>
+<body>
+
+    <header class="polaris-header">
+        <div style="display: flex; justify-content: flex-start;"></div>
+        <h1>REGISTRAR PRODUCTOS</h1>
+        <div style="display: flex; justify-content: flex-end;">
+            <span class="material-icons-outlined icon-btn" onclick="window.location.href='Control.html'" title="Volver al Panel" style="font-size: 24px;">exit_to_app</span>
+        </div>
+    </header>
+
+    <div class="form-layout">
+        <form id="form-ingreso" onsubmit="event.preventDefault(); guardarIngreso();">
+            
+            <div class="polaris-card">
+                <div class="polaris-card-header">DETALLES DEL DOCUMENTO</div>
+                <div class="polaris-card-body form-grid">
+                    <div class="polaris-field">
+                        <label class="polaris-label">Nº Factura / Boleta</label>
+                        <input type="text" id="in-documento" class="polaris-input" placeholder="F-000-00003" required>
+                    </div>
+                    <div class="polaris-field">
+                        <label class="polaris-label">Fecha de ingreso</label>
+                        <input type="date" id="in-fecha" class="polaris-input" required readonly title="Asignado automáticamente">
+                    </div>
+                    
+                    <div class="polaris-field full-width">
+                        <label class="polaris-label">Almacén / Tienda de destino</label>
+                        <select id="in-almacen" class="polaris-input" required></select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="polaris-card">
+                <div class="polaris-card-header">DETALLES DEL PRODUCTO</div>
+                <div class="polaris-card-body form-grid">
+                    <div class="polaris-field full-width">
+                        <label class="polaris-label">Código del producto (SKU)</label>
+                        <div class="polaris-input-wrapper">
+                            <input type="text" id="in-codigo" class="polaris-input" placeholder="Escanea o escribe el código" required>
+                            <button type="button" class="action-icon" onclick="mostrarToast('Iniciando cámara para escaneo...')">
+                                <span class="material-icons-outlined" style="font-size: 20px;">qr_code_scanner</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="polaris-field full-width">
+                        <label class="polaris-label">Nombre del producto</label>
+                        <input type="text" id="in-nombre" class="polaris-input" placeholder="Ej. Taladro Percutor 500W" required>
+                    </div>
+                    
+                    <div class="polaris-field full-width">
+                        <label class="polaris-label">Categoría</label>
+                        <select id="in-categoria" class="polaris-input" required></select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="polaris-card">
+                <div class="polaris-card-header">Cálculo de Precios</div>
+                <div class="polaris-card-body form-grid">
+                    <div class="polaris-field">
+                        <label class="polaris-label">Cant. a Ingresar</label>
+                        <input type="number" id="in-cantidad" class="polaris-input" placeholder="Ej. 10" min="0.1" step="0.1" required oninput="calcularPrecioVenta()">
+                    </div>
+
+                    <div class="polaris-field">
+                        <label class="polaris-label">Unidad Medida</label>
+                        <select id="in-unidad" class="polaris-input" required></select>
+                    </div>
+                    
+                    <div class="polaris-field">
+                        <label class="polaris-label">Costo Lote (S/.)</label>
+                        <div class="polaris-input-wrapper">
+                            <span class="prefix">S/.</span>
+                            <input type="number" id="in-costo-total" class="polaris-input has-prefix" placeholder="0.00" min="0.01" step="0.01" required oninput="calcularPrecioVenta()">
+                        </div>
+                    </div>
+                    
+                    <div class="polaris-field">
+                        <label class="polaris-label">Precio Sugerido</label>
+                        <div class="polaris-input-wrapper">
+                            <span class="prefix">S/.</span>
+                            <input type="text" id="in-precio-calculado" class="polaris-input has-prefix" value="0.00" readonly style="font-weight: 600; color: var(--p-action-primary); background-color: #f0fdf4; border-color: #bbf7d0;">
+                        </div>
+                        <span style="font-size: 10px; color: var(--p-text-subdued); margin-top: 2px;">Costo + Margen Configurado + IGV</span>
+                    </div>
+                </div>
+            </div>
+
+        </form>
+    </div>
+
+    <div class="fab-container">
+        <button type="button" class="fab-button fab-template" onclick="descargarPlantillaDinamica()" title="Descargar Plantilla Base">
+            <span class="material-icons-outlined" style="font-size: 22px;">file_download</span>
+        </button>
+
+        <label for="import-excel" class="fab-button fab-import" title="Importar Archivo Excel">
+            <span class="material-icons-outlined" style="font-size: 22px;">file_upload</span>
+        </label>
+        <input type="file" id="import-excel" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel" style="display: none;">
+    </div>
+
+    <div class="polaris-bottom-bar">
+        <div class="price-summary">
+            <span>Precio Sugerido Unit.</span>
+            <strong id="bar-precio">S/. 0.00</strong>
+        </div>
+        <button type="submit" form="form-ingreso" class="polaris-btn-primary" id="btn-guardar">GUARDAR LOTE</button>
+    </div>
+
+    <div id="modal-alerta" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header" id="alerta-header">
+                <span class="material-icons-outlined" id="alerta-icon">error</span>
+                <h3 id="alerta-titulo">Atención</h3>
+            </div>
+            <div class="modal-body" id="alerta-mensaje">Mensaje de error aquí.</div>
+            <div class="modal-footer">
+                <button class="polaris-btn-primary" onclick="cerrarAlerta()">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="polaris-toast">
+        <span class="material-icons-outlined" style="font-size: 18px;" id="toast-icon">check_circle</span>
+        <span id="toast-msg">Mensaje temporal</span>
+    </div>
+
+<script>
+    'use strict';
+
+    // 1. INICIALIZAR FIREBASE
+    const firebaseConfig = {
+        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
+        authDomain: "pos-mef-ventas.firebaseapp.com",
+        projectId: "pos-mef-ventas",
+        storageBucket: "pos-mef-ventas.firebasestorage.app",
+        messagingSenderId: "704671042289",
+        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    // Variables globales para la nube
+    let catAlmacenes = [];
+    let catCategorias = [];
+    let catUnidades = [];
+    let globalIgv = 18;
+    let globalMargen = 30;
+
+    // ==========================================
+    // SISTEMA VISUAL DE ALERTAS
+    // ==========================================
+    let alertaCallback = null;
+
+    function mostrarAlerta(titulo, mensaje, tipo = 'error', callback = null) {
+        const modal = document.getElementById('modal-alerta');
+        const header = document.getElementById('alerta-header');
+        const icon = document.getElementById('alerta-icon');
+        
+        document.getElementById('alerta-titulo').innerText = titulo;
+        document.getElementById('alerta-mensaje').innerText = mensaje;
+
+        header.className = 'modal-header'; 
+        if(tipo === 'error') { header.classList.add('error'); icon.innerText = 'error'; } 
+        else if (tipo === 'warning') { header.classList.add('warning'); icon.innerText = 'warning'; } 
+        else if (tipo === 'success') { header.classList.add('success'); icon.innerText = 'check_circle'; }
+        else if (tipo === 'info') { header.classList.add('info'); icon.innerText = 'info'; }
+
+        alertaCallback = callback;
+        modal.style.display = 'flex';
+    }
+
+    function cerrarAlerta() {
+        document.getElementById('modal-alerta').style.display = 'none';
+        if (alertaCallback) { alertaCallback(); alertaCallback = null; }
+    }
+
+    function mostrarToast(mensaje) {
+        const toast = document.getElementById('toast');
+        document.getElementById('toast-msg').innerText = mensaje;
+        toast.style.display = 'flex';
+        setTimeout(() => { toast.style.display = 'none'; }, 2500);
+    }
+
+    // ==========================================
+    // INICIALIZACIÓN Y DESCARGA DESDE FIREBASE
+    // ==========================================
+    window.onload = async () => {
+        const sesionStr = localStorage.getItem('isa_sesion');
+        if (!sesionStr) { window.location.href = 'login.html'; return; }
+
+        const sesion = JSON.parse(sesionStr);
+        if (sesion.rol === 'Vendedor') {
+            alert('Acceso Denegado: Su rol de Vendedor no tiene permisos para ingresar mercadería.');
+            window.location.href = 'Control.html'; return;
+        }
+
+        document.getElementById('in-fecha').value = new Date().toISOString().split('T')[0];
+        
+        // Cargar catálogos e impuestos desde Firebase
+        try {
+            const configSnap = await db.collection('sistema').doc('configuracion').get();
+            
+            if (configSnap.exists) {
+                const data = configSnap.data();
+                catAlmacenes = data.almacenes || [];
+                catCategorias = data.categorias || [];
+                catUnidades = data.unidades || [];
+                globalIgv = data.igv !== undefined ? parseFloat(data.igv) : 18;
+                globalMargen = data.margenSugerido !== undefined ? parseFloat(data.margenSugerido) : 30;
+            }
+
+            // Si los catálogos están vacíos, bloqueamos la pantalla (SIN crear datos de prueba)
+            if (catAlmacenes.length === 0 || catCategorias.length === 0 || catUnidades.length === 0) {
+                document.getElementById('in-almacen').innerHTML = '<option value="" disabled selected>-- Vacío --</option>';
+                document.getElementById('in-categoria').innerHTML = '<option value="" disabled selected>-- Vacío --</option>';
+                document.getElementById('in-unidad').innerHTML = '<option value="" disabled selected>-- Vacío --</option>';
+                document.getElementById('btn-guardar').disabled = true;
+
+                mostrarAlerta(
+                    "¡Falta Configuración!", 
+                    "Su sistema no tiene Almacenes, Categorías o Unidades de Medida registradas en la nube.\n\nPor favor, diríjase al panel de 'Configuración' y agregue estos datos antes de ingresar mercadería.", 
+                    "warning"
+                );
+            } else {
+                cargarCatalogosDinamicos();
+            }
+
+        } catch (error) {
+            console.error("Error conectando a la nube:", error);
+            mostrarAlerta("Error de Conexión", "No se pudo conectar a la base de datos para leer la configuración.", "error");
+        }
+    };
+
+    function cargarCatalogosDinamicos() {
+        const llenarSelect = (idSelect, arregloDatos, textoDefault) => {
+            const select = document.getElementById(idSelect);
+            if (!select) return;
+            select.innerHTML = `<option value="" disabled selected>-- ${textoDefault} --</option>`;
+            arregloDatos.forEach(item => {
+                select.innerHTML += `<option value="${item}">${item}</option>`;
+            });
+        };
+
+        llenarSelect('in-categoria', catCategorias, 'Seleccione Categoría');
+        llenarSelect('in-almacen', catAlmacenes, 'Seleccione Almacén');
+        llenarSelect('in-unidad', catUnidades, 'Seleccione Medida');
+    }
+
+    function calcularPrecioVenta() {
+        const cantidad = parseFloat(document.getElementById('in-cantidad').value) || 0;
+        const costoTotal = parseFloat(document.getElementById('in-costo-total').value) || 0;
+
+        let precioVentaSugerido = 0;
+
+        if (cantidad > 0 && costoTotal > 0) {
+            const costoUnitario = costoTotal / cantidad;
+            const ganancia = costoUnitario * (globalMargen / 100);
+            const precioBase = costoUnitario + ganancia;
+            precioVentaSugerido = precioBase * (1 + (globalIgv / 100));
+        }
+        
+        const precioFormateado = precioVentaSugerido.toFixed(2);
+        document.getElementById('in-precio-calculado').value = precioFormateado;
+        document.getElementById('bar-precio').innerText = `S/. ${precioFormateado}`;
+    }
+
+    // ==========================================
+    // GUARDAR MANUALMENTE UN INGRESO (EN LA NUBE)
+    // ==========================================
+    async function guardarIngreso() {
+        const numDoc = document.getElementById('in-documento').value.trim().toUpperCase();
+        const codProd = document.getElementById('in-codigo').value.trim().toUpperCase();
+        const nombreProd = document.getElementById('in-nombre').value.trim().toUpperCase();
+        const categoria = document.getElementById('in-categoria').value;
+        const almacen = document.getElementById('in-almacen').value;
+        const unidad = document.getElementById('in-unidad').value;
+        const cantidad = parseFloat(document.getElementById('in-cantidad').value);
+        const costoTotal = parseFloat(document.getElementById('in-costo-total').value);
+        const btnGuardar = document.getElementById('btn-guardar');
+
+        if (!almacen || !unidad || !categoria) return mostrarAlerta("Campos Incompletos", "Debe configurar y seleccionar opciones de los menús desplegables.", "warning");
+        if (!numDoc || !codProd || !nombreProd) return mostrarAlerta("Campos Incompletos", "Complete todos los campos de texto.", "warning");
+        if (isNaN(cantidad) || cantidad <= 0) return mostrarAlerta("Cantidad Inválida", "La cantidad debe ser mayor a 0.", "error");
+        if (isNaN(costoTotal) || costoTotal <= 0) return mostrarAlerta("Costo Inválido", "El costo total debe ser mayor a 0.", "error");
+
+        btnGuardar.innerText = "GUARDANDO...";
+        btnGuardar.disabled = true;
+
+        try {
+            // Verificar duplicados en Firebase
+            const prodRef = db.collection('productos').doc(codProd);
+            const docSnap = await prodRef.get();
+
+            if (docSnap.exists) {
+                btnGuardar.innerText = "GUARDAR LOTE";
+                btnGuardar.disabled = false;
+                return mostrarAlerta("Código Duplicado", `El código SKU "${codProd}" ya existe en el inventario de la nube.`, "error");
+            }
+
+            const nuevoIngreso = {
+                id: Date.now().toString(),
+                doc: numDoc,
+                fecha: document.getElementById('in-fecha').value,
+                almacen: almacen,
+                cod: codProd,
+                nombre: nombreProd,
+                categoria: categoria,
+                cant: cantidad,
+                unidad: unidad,
+                costoTotalUSD: costoTotal,
+                precioUnitarioPEN: parseFloat(document.getElementById('in-precio-calculado').value),
+                anulado: false
+            };
+
+            // Guardar directo en la nube
+            await prodRef.set(nuevoIngreso);
+
+            mostrarToast(`¡Lote guardado en la Nube con éxito!`);
+            setTimeout(() => { window.location.reload(); }, 1500);
+
+        } catch (error) {
+            console.error("Error guardando producto:", error);
+            btnGuardar.innerText = "GUARDAR LOTE";
+            btnGuardar.disabled = false;
+            mostrarAlerta("Error de Conexión", "No se pudo guardar en la nube. Verifica tu internet.", "error");
+        }
+    }
+
+    // ==========================================
+    // IMPORTADOR MASIVO INTELIGENTE (DIRECTO A FIREBASE)
+    // ==========================================
+    function descargarPlantillaDinamica() {
+        try {
+            if (catAlmacenes.length === 0 || catCategorias.length === 0 || catUnidades.length === 0) {
+                return mostrarAlerta("Acción Bloqueada", "Debe configurar Almacenes, Categorías y Unidades antes de descargar la plantilla.", "warning");
+            }
+
+            const hojaPrincipalDatos = [
+                ["Nº de documento", "Codigo", "Nombre del Producto", "Categoria", "Almacen", "Unidad", "Cantidad", "Costo Total"],
+                ["F-0001", "PROD-DEMO", "EJEMPLO DE PRODUCTO", catCategorias[0], catAlmacenes[0], catUnidades[0], 10, 150.50]
+            ];
+            const wsPrincipal = XLSX.utils.aoa_to_sheet(hojaPrincipalDatos);
+            wsPrincipal['!cols'] = [{wch: 18}, {wch: 15}, {wch: 30}, {wch: 20}, {wch: 20}, {wch: 10}, {wch: 10}, {wch: 15}];
+
+            const maxFilas = Math.max(catCategorias.length, catAlmacenes.length, catUnidades.length);
+            const hojaValoresDatos = [["Categorias Permitidas", "Almacenes Permitidos", "Unidades Permitidas"]];
+            
+            for (let i = 0; i < maxFilas; i++) {
+                hojaValoresDatos.push([ catCategorias[i] || "", catAlmacenes[i] || "", catUnidades[i] || "" ]);
+            }
+            const wsValores = XLSX.utils.aoa_to_sheet(hojaValoresDatos);
+            wsValores['!cols'] = [{wch: 25}, {wch: 25}, {wch: 20}];
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, wsPrincipal, "Plantilla_Inventario");
+            XLSX.utils.book_append_sheet(wb, wsValores, "Valores_Permitidos");
+
+            XLSX.writeFile(wb, "PLANTILLA_MEF_INVENTARIO.xlsx");
+            mostrarToast("Plantilla generada y descargada.");
+        } catch (error) {
+            console.error("Error al generar:", error);
+            mostrarAlerta("Error", "No se pudo generar la plantilla dinámica.", "error");
+        }
+    }
+
+    document.getElementById('import-excel').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        e.target.value = null; 
+
+        if (catAlmacenes.length === 0 || catCategorias.length === 0 || catUnidades.length === 0) {
+            return mostrarAlerta("Importación Bloqueada", "Debe tener Almacenes, Categorías y Unidades configuradas en la nube antes de importar.", "error");
+        }
+
+        const reader = new FileReader();
+        reader.onload = async function(evt) {
+            try {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                const firstSheetName = workbook.SheetNames[0]; 
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet);
+
+                if(json.length === 0) return mostrarAlerta("Archivo Vacío", "El archivo Excel está vacío o no tiene el formato correcto.", "warning");
+
+                mostrarToast("Validando archivo y subiendo a la Nube...");
+                const batch = db.batch(); // Lote de subida masiva a Firebase
+                let codigosEnExcel = []; 
+
+                for (let i = 0; i < json.length; i++) {
+                    const row = json[i];
+                    const filaExcel = i + 2; 
+
+                    const numDoc = (row['Nº de documento'] || row['Documento'] || "").toString().trim().toUpperCase();
+                    if(!numDoc) return mostrarAlerta("Importación Cancelada", `ERROR EN FILA ${filaExcel}:\nEl 'Nº de documento' es obligatorio.`, "error");
+
+                    const codProd = (row['Codigo'] || row['Código'] || "").toString().trim().toUpperCase();
+                    const nombreProd = (row['Nombre del Producto'] || row['Nombre'] || "").toString().trim().toUpperCase();
+                    if(!codProd || !nombreProd) return mostrarAlerta("Importación Cancelada", `ERROR EN FILA ${filaExcel}:\nCódigo y Nombre son obligatorios.`, "error");
+
+                    if (codigosEnExcel.includes(codProd)) return mostrarAlerta("Importación Cancelada", `ERROR EN FILA ${filaExcel}:\nEl código "${codProd}" está repetido dentro del archivo Excel.`, "error");
+                    codigosEnExcel.push(codProd);
+
+                    // Verificar en Firebase si ya existe
+                    const docSnap = await db.collection('productos').doc(codProd).get();
+                    if (docSnap.exists) return mostrarAlerta("Importación Cancelada", `ERROR EN FILA ${filaExcel}:\nEl código "${codProd}" ya está registrado en la Nube.`, "error");
+
+                    const almacen = (row['Almacen'] || row['Almacén'] || "").toString().trim().toUpperCase();
+                    if (!catAlmacenes.includes(almacen)) return mostrarAlerta("Importación Cancelada", `ERROR EN FILA ${filaExcel}:\nAlmacén "${almacen}" no registrado en Configuración.`, "error");
+
+                    const categoria = (row['Categoria'] || row['Categoría'] || "").toString().trim().toUpperCase();
+                    if (!catCategorias.includes(categoria)) return mostrarAlerta("Importación Cancelada", `ERROR EN FILA ${filaExcel}:\nCategoría "${categoria}" no registrada en Configuración.`, "error");
+
+                    const unidadCruda = (row['Unidad'] || "").toString().trim().toUpperCase().replace(/\./g, '');
+                    if (!catUnidades.includes(unidadCruda)) return mostrarAlerta("Importación Cancelada", `ERROR EN FILA ${filaExcel}:\nUnidad "${unidadCruda}" no registrada en Configuración.`, "error");
+
+                    const cantidad = parseFloat(row['Cantidad']);
+                    if (isNaN(cantidad) || cantidad <= 0) return mostrarAlerta("Importación Cancelada", `ERROR EN FILA ${filaExcel}:\nLa cantidad debe ser mayor a 0.`, "error");
+                    
+                    let costoCrudo = row['Costo Total'] || row['Precio Total'] || 0;
+                    if(typeof costoCrudo === 'string') costoCrudo = costoCrudo.replace(/[^0-9.-]+/g,"");
+                    const costoTotal = parseFloat(costoCrudo);
+                    if (isNaN(costoTotal) || costoTotal <= 0) return mostrarAlerta("Importación Cancelada", `ERROR EN FILA ${filaExcel}:\nEl Costo Total debe ser mayor a 0.`, "error");
+
+                    const fechaAutomatica = new Date().toISOString().split('T')[0];
+                    const costoUnitario = costoTotal / cantidad;
+                    const precioSug = parseFloat(((costoUnitario + (costoUnitario * (globalMargen / 100))) * (1 + (globalIgv / 100))).toFixed(2));
+
+                    const nuevoIngresoMasivo = {
+                        id: Date.now().toString() + i, doc: numDoc, fecha: fechaAutomatica, almacen: almacen, cod: codProd,
+                        nombre: nombreProd, categoria: categoria, cant: cantidad, unidad: unidadCruda, 
+                        costoTotalUSD: costoTotal, precioUnitarioPEN: precioSug, anulado: false
+                    };
+
+                    // Agregamos al bloque de subida a la nube
+                    batch.set(db.collection('productos').doc(codProd), nuevoIngresoMasivo);
+                }
+
+                // Subir todo de golpe a Firebase
+                await batch.commit();
+                
+                mostrarAlerta("¡Importación Exitosa!", `Se validaron y subieron ${json.length} productos directamente a la base de datos en la Nube.`, "success", () => { 
+                    window.location.reload(); 
+                });
+
+            } catch(error) {
+                console.error("Error en importación masiva:", error);
+                mostrarAlerta("Error Crítico", "Hubo un error de conexión al subir el Excel a la nube. Verifica tu conexión.", "error");
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    });
+</script>
+</body>
+</html>
