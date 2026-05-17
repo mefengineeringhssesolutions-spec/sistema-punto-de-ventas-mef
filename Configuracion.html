@@ -561,7 +561,7 @@
         }
     }
 
-    // Función mejorada: Importar Base de Datos (Traductor Universal)
+    // Función definitiva: Importación por Lotes (Evita pérdida de datos)
     function procesarArchivoImportacion(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -570,14 +570,14 @@
         reader.onload = async function(e) {
             try {
                 const data = JSON.parse(e.target.result);
-                mostrarToast("Analizando y restaurando datos a Firebase...");
+                mostrarToast("Empaquetando datos para envío seguro...");
                 
-                const promesasDeSubida = [];
+                // CREAMOS UN LOTE DE FIREBASE (Máximo 500 operaciones por viaje)
+                const batch = db.batch();
+                let cantidadOperaciones = 0;
 
-                // 1. Restaurar Configuración (Maneja el formato nuevo 'configuracion' y el antiguo 'config')
+                // 1. Restaurar Configuración
                 let configFinal = data.configuracion || data.config || {};
-                
-                // Si el JSON trae los catálogos por separado (formato antiguo), los unimos
                 if (data.catalogos) {
                     configFinal.almacenes = data.catalogos.almacenes || [];
                     configFinal.categorias = data.catalogos.categorias || [];
@@ -585,18 +585,19 @@
                 }
                 
                 if (Object.keys(configFinal).length > 0) {
-                    promesasDeSubida.push(configRef.set(configFinal, { merge: true }));
+                    batch.set(configRef, configFinal, { merge: true });
+                    cantidadOperaciones++;
                 }
 
-                // 2. Restaurar Productos (Busca la carpeta 'productos' o la antigua 'ingresos')
+                // 2. Restaurar Productos
                 const listaProductos = data.productos || data.ingresos || [];
                 if (Array.isArray(listaProductos)) {
                     listaProductos.forEach(p => {
-                        // El JSON antiguo usa 'cod', el nuevo usa 'codigo'. Tomamos el que exista.
                         const idDoc = p.codigo || p.cod || p.id;
                         if (idDoc) {
-                            // Guardamos siempre en la colección oficial 'productos' de Firebase
-                            promesasDeSubida.push(db.collection('productos').doc(idDoc).set(p));
+                            const docRef = db.collection('productos').doc(idDoc);
+                            batch.set(docRef, p);
+                            cantidadOperaciones++;
                         }
                     });
                 }
@@ -604,7 +605,11 @@
                 // 3. Restaurar Ventas
                 if (data.ventas && Array.isArray(data.ventas)) {
                     data.ventas.forEach(v => {
-                        if (v.id) promesasDeSubida.push(db.collection('ventas').doc(v.id).set(v));
+                        if (v.id) {
+                            const docRef = db.collection('ventas').doc(v.id);
+                            batch.set(docRef, v);
+                            cantidadOperaciones++;
+                        }
                     });
                 }
 
@@ -612,62 +617,79 @@
                 if (data.clientes && Array.isArray(data.clientes)) {
                     data.clientes.forEach(c => {
                         const idCliente = c.dni || c.id;
-                        if (idCliente) promesasDeSubida.push(db.collection('clientes').doc(idCliente).set(c));
+                        if (idCliente) {
+                            const docRef = db.collection('clientes').doc(idCliente);
+                            batch.set(docRef, c);
+                            cantidadOperaciones++;
+                        }
                     });
                 }
 
-                // 5. Restaurar Usuarios (Viene en tu archivo JSON)
+                // 5. Restaurar Usuarios
                 if (data.usuarios && Array.isArray(data.usuarios)) {
                     data.usuarios.forEach(u => {
                         const idUser = u.dni || u.id;
-                        if (idUser) promesasDeSubida.push(db.collection('usuarios').doc(idUser).set(u));
+                        if (idUser) {
+                            const docRef = db.collection('usuarios').doc(idUser);
+                            batch.set(docRef, u);
+                            cantidadOperaciones++;
+                        }
                     });
                 }
 
-                // Si no encontró nada compatible, avisa al usuario
-                if(promesasDeSubida.length === 0) {
-                   return mostrarAlerta("Archivo Vacío o Incompatible", "No se encontraron datos válidos para restaurar.", "warning");
+                if(cantidadOperaciones === 0) {
+                   return mostrarAlerta("Archivo Vacío o Incompatible", "No se encontraron datos válidos.", "warning");
                 }
 
-                // Ejecutar todas las subidas de forma paralela
-                await Promise.all(promesasDeSubida);
+                mostrarToast(`Subiendo paquete masivo de ${cantidadOperaciones} registros...`);
+
+                // ENVIAMOS LA CAJA COMPLETA A FIREBASE (Todo o nada)
+                await batch.commit();
                 
-                mostrarAlerta("Restauración Exitosa", `Se han inyectado ${promesasDeSubida.length} registros en la Nube correctamente.`, "success");
+                mostrarAlerta("Restauración Exitosa", `Se han inyectado los ${cantidadOperaciones} registros en la Nube correctamente y sin pérdidas.`, "success");
                 
-                // Recargar para que los cambios surtan efecto en la vista actual
                 setTimeout(() => location.reload(), 3000);
 
             } catch (error) {
                 console.error(error);
-                mostrarAlerta("Error de Archivo", "El archivo de respaldo está corrupto o no es válido para este sistema.", "error");
+                mostrarAlerta("Error de Red", "El archivo es válido, pero falló la conexión al inyectar el lote.", "error");
             }
         };
         reader.readAsText(file);
     }
 
     // ==========================================
-    // LIMPIEZA ABSOLUTA DEL SISTEMA (BORRADO TOTAL EN FIREBASE)
+    // LIMPIEZA ABSOLUTA DEL SISTEMA (BORRADO TOTAL EN FIREBASE - CON LOTES)
     // ==========================================
     function abrirModalLimpieza() { document.getElementById('modal-danger').style.display = 'flex'; }
     function cerrarModalLimpieza() { document.getElementById('modal-danger').style.display = 'none'; }
     
     async function ejecutarLimpieza() {
         cerrarModalLimpieza();
-        mostrarToast("Arrasando registros en la Nube...");
+        mostrarToast("Arrasando registros en la Nube de forma segura...");
         
         try {
-            const promesasBorrado = [];
+            const batch = db.batch();
+            let cantidadBorrados = 0;
 
             // 1. Obtener y preparar el borrado de TODOS los productos
             const productosSnap = await db.collection('productos').get();
-            productosSnap.forEach(doc => promesasBorrado.push(doc.ref.delete()));
+            productosSnap.forEach(doc => {
+                batch.delete(doc.ref);
+                cantidadBorrados++;
+            });
 
             // 2. Obtener y preparar el borrado de TODAS las ventas (incluidas las anuladas)
             const ventasSnap = await db.collection('ventas').get();
-            ventasSnap.forEach(doc => promesasBorrado.push(doc.ref.delete()));
+            ventasSnap.forEach(doc => {
+                batch.delete(doc.ref);
+                cantidadBorrados++;
+            });
 
-            // 3. Ejecutar el borrado masivo
-            await Promise.all(promesasBorrado);
+            // 3. Ejecutar el borrado masivo solo si hay algo que borrar
+            if (cantidadBorrados > 0) {
+                await batch.commit();
+            }
             
             // Limpiar caché local
             localStorage.removeItem('isa_ingresos_db'); 
