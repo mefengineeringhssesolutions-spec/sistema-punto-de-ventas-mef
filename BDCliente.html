@@ -70,10 +70,6 @@
 
         .empty-state { text-align: center; padding: 40px 20px; color: var(--p-text-subdued); border: 1px dashed var(--p-border); border-radius: 8px; background: var(--p-surface);}
 
-        /* Botón de Cargar Más */
-        .btn-cargar-mas { width: 100%; max-width: 800px; margin: 10px auto 30px; background: var(--p-interactive-light); color: var(--p-interactive); border: 1px dashed var(--p-interactive); padding: 12px; border-radius: 8px; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 8px;}
-        .btn-cargar-mas:hover { background: #e0e7ff; }
-
         /* FORMULARIO EDITAR CLIENTE (OCULTO) */
         #vista-form { display: none; padding: 20px; max-width: 600px; margin: 0 auto; height: 100%; overflow-y: auto; width: 100%;}
         #form-nuevo-cliente { background: var(--p-surface); padding: 20px; border-radius: 8px; box-shadow: var(--p-shadow-card); border: 1px solid var(--p-border);}
@@ -122,7 +118,7 @@
 
         <div class="dashboard-container">
             <div class="kpi-card">
-                <h3>Clientes Cargados</h3>
+                <h3>Clientes Registrados</h3>
                 <div class="value" id="kpi-total-clientes">0</div>
             </div>
 
@@ -140,9 +136,6 @@
         <div class="client-list" id="clientes-container">
             <div class="loader"></div>
         </div>
-        <button id="btn-cargar-mas" class="btn-cargar-mas" onclick="cargarMasClientes()">
-            <span class="material-icons-outlined">expand_more</span> Cargar 50 clientes más
-        </button>
     </div>
 
     <button class="fab-add" id="btn-fab" onclick="window.location.href='RegistroClientes.html'" title="Registrar Nuevo Cliente">
@@ -230,10 +223,8 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Variables globales para paginación y memoria
+    // Variable global para memoria
     let globalClientes = [];
-    let ultimoDocumentoDescargado = null; 
-    const LIMITE_POR_CARGA = 50; 
 
     // ==========================================
     // SISTEMA VISUAL DE ALERTAS Y TOASTS
@@ -323,7 +314,7 @@
             contenedor.appendChild(card);
         });
 
-        document.getElementById('kpi-total-clientes').innerText = globalClientes.length;
+        document.getElementById('kpi-total-clientes').innerText = datos.length;
     }
 
     function aplicarFiltros() {
@@ -405,13 +396,13 @@
             aplicarFiltros(); 
             mostrarToast("Cliente actualizado en Firebase");
             btnGuardar.disabled = false;
-            btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 16px;">save</span> Actualizar`;
+            btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 16px;">save</span> Guardar`;
 
         } catch (error) {
             console.error("Error al actualizar cliente:", error);
             mostrarAlerta("Error de Conexión", "No se pudo actualizar el cliente en la nube.", "error");
             btnGuardar.disabled = false;
-            btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 16px;">save</span> Actualizar`;
+            btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 16px;">save</span> Guardar`;
         }
     }
 
@@ -436,66 +427,7 @@
     function llamarCliente(numero) { window.location.href = `tel:${numero}`; }
 
     // ==========================================
-    // LÓGICA DE DESCARGA PAGINADA (NUEVO)
-    // ==========================================
-    async function cargarDirectorio() {
-        try {
-            // Consulta base: Ordenar de más nuevo a más viejo y limitar a 50
-            let consulta = db.collection('clientes').orderBy('fechaRegistro', 'desc').limit(LIMITE_POR_CARGA);
-            
-            // Si ya descargamos documentos antes, empezar DESPUÉS del último
-            if (ultimoDocumentoDescargado !== null) {
-                consulta = consulta.startAfter(ultimoDocumentoDescargado);
-            }
-
-            const snapshot = await consulta.get();
-            
-            if (snapshot.empty) {
-                document.getElementById('btn-cargar-mas').style.display = 'none';
-                if(globalClientes.length === 0) renderizarClientes([]);
-                return;
-            }
-
-            // Guardar el último documento de esta tanda para la siguiente página
-            ultimoDocumentoDescargado = snapshot.docs[snapshot.docs.length - 1];
-
-            snapshot.forEach(doc => {
-                globalClientes.push(doc.data());
-            });
-
-            aplicarFiltros(); 
-
-            // Si trajimos menos de 50, significa que ya no hay más clientes en la nube
-            if (snapshot.docs.length < LIMITE_POR_CARGA) {
-                document.getElementById('btn-cargar-mas').style.display = 'none';
-            } else {
-                document.getElementById('btn-cargar-mas').style.display = 'flex';
-            }
-
-        } catch (error) {
-            console.error("Error descargando clientes de Firebase:", error);
-            document.getElementById('clientes-container').innerHTML = `
-                <div class="empty-state" style="border-color: #fca5a5; color: #b91c1c;">
-                    <span class="material-icons-outlined" style="font-size: 32px; margin-bottom: 10px;">cloud_off</span>
-                    <p>Error de conexión al cargar el directorio desde la Nube.</p>
-                </div>`;
-            mostrarAlerta("Error de Conexión", "No se pudieron cargar los clientes desde Firebase.", "error");
-        }
-    }
-
-    function cargarMasClientes() {
-        const btn = document.getElementById('btn-cargar-mas');
-        btn.innerHTML = `<span class="material-icons-outlined" style="animation: spin 1s linear infinite;">autorenew</span> Cargando...`;
-        btn.disabled = true;
-
-        cargarDirectorio().then(() => {
-            btn.innerHTML = `<span class="material-icons-outlined">expand_more</span> Cargar 50 clientes más`;
-            btn.disabled = false;
-        });
-    }
-
-    // ==========================================
-    // INICIALIZACIÓN Y GUARDIÁN
+    // INICIALIZACIÓN, DESCARGA Y GUARDIÁN
     // ==========================================
     window.onload = async () => {
         // --- INICIO DEL GUARDIÁN ---
@@ -514,8 +446,25 @@
         const opciones = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' };
         document.getElementById('txt-fecha').innerHTML = `Generado: <strong>${hoy.toLocaleDateString('es-PE', opciones)}</strong>`;
         
-        // Iniciar la descarga segura de los primeros 50 clientes
-        cargarDirectorio();
+        try {
+            // Descargar clientes desde Firebase ordenados por fecha de registro
+            const snapshot = await db.collection('clientes').orderBy('fechaRegistro', 'desc').get();
+            
+            globalClientes = [];
+            snapshot.forEach(doc => {
+                globalClientes.push(doc.data());
+            });
+
+            aplicarFiltros(); 
+        } catch (error) {
+            console.error("Error descargando clientes de Firebase:", error);
+            document.getElementById('clientes-container').innerHTML = `
+                <div class="empty-state" style="border-color: #fca5a5; color: #b91c1c;">
+                    <span class="material-icons-outlined" style="font-size: 32px; margin-bottom: 10px;">cloud_off</span>
+                    <p>Error de conexión al cargar el directorio desde la Nube.</p>
+                </div>`;
+            mostrarAlerta("Error de Conexión", "No se pudieron cargar los clientes desde Firebase.", "error");
+        }
     };
 </script>
 
