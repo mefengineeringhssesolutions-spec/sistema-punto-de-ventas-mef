@@ -124,6 +124,10 @@
         
         .loader { border: 4px solid #f3f3f3; border-top: 4px solid #1e293b; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Botón de Cargar Más */
+        .btn-cargar-mas { width: 100%; max-width: 800px; margin: 10px auto 30px; background: var(--p-interactive-light); color: var(--p-interactive); border: 1px dashed var(--p-interactive); padding: 12px; border-radius: 8px; font-weight: 700; cursor: pointer; display: none; align-items: center; justify-content: center; gap: 8px;}
+        .btn-cargar-mas:hover { background: #e0e7ff; }
     </style>
 </head>
 <body>
@@ -139,12 +143,12 @@
 
         <div class="system-info">
             <span id="txt-fecha">Generado: --/--/----</span>
-            <span>Ventas Válidas: <strong id="txt-count" style="color: var(--p-action-primary);">0</strong></span>
+            <span>Ventas Cargadas: <strong id="txt-count" style="color: var(--p-action-primary);">0</strong></span>
         </div>
 
         <div class="dashboard-container">
             <div class="kpi-card">
-                <h3>Ingresos Recaudados</h3>
+                <h3>Ingresos Recaudados (Cargados)</h3>
                 <div class="value" id="kpi-total-ingresos">S/ 0.00</div>
             </div>
 
@@ -179,6 +183,9 @@
         <div class="sales-list" id="ventas-container">
             <div class="loader"></div>
         </div>
+        <button id="btn-cargar-mas" class="btn-cargar-mas" onclick="cargarMasVentas()">
+            <span class="material-icons-outlined">expand_more</span> Cargar 50 ventas más antiguas
+        </button>
     </div>
 
     <div id="modal-alerta" class="modal-overlay">
@@ -228,8 +235,10 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // Variable global para almacenar las ventas descargadas
+    // Variables globales para la carga optimizada
     let globalVentas = [];
+    let ultimoDocumentoDescargado = null; // Guarda el punto exacto donde se quedó Firebase
+    const LIMITE_POR_CARGA = 50; 
 
     // ==========================================
     // SISTEMA VISUAL DE ALERTAS PRO
@@ -390,7 +399,7 @@
         });
 
         document.getElementById('kpi-total-ingresos').innerText = formatoSoles.format(totalRecaudado);
-        document.getElementById('txt-count').innerText = ventasValidasCount;
+        document.getElementById('txt-count').innerText = globalVentas.length;
     }
 
     // ==========================================
@@ -496,7 +505,66 @@
     }
 
     // ==========================================
-    // INICIALIZACIÓN, DESCARGA Y GUARDIÁN
+    // LÓGICA DE DESCARGA PAGINADA (NUEVO)
+    // ==========================================
+    async function cargarHistorial() {
+        try {
+            // Consulta base: Ordenar de más nuevo a más viejo y limitar a 50
+            let consulta = db.collection('ventas').orderBy('id', 'desc').limit(LIMITE_POR_CARGA);
+            
+            // Si ya descargamos documentos antes, empezar DESPUÉS del último
+            if (ultimoDocumentoDescargado !== null) {
+                consulta = consulta.startAfter(ultimoDocumentoDescargado);
+            }
+
+            const snapshot = await consulta.get();
+            
+            if (snapshot.empty) {
+                document.getElementById('btn-cargar-mas').style.display = 'none';
+                if(globalVentas.length === 0) renderizarVentas([]);
+                return;
+            }
+
+            // Guardar el último documento de esta tanda para la siguiente página
+            ultimoDocumentoDescargado = snapshot.docs[snapshot.docs.length - 1];
+
+            snapshot.forEach(doc => {
+                globalVentas.push(doc.data());
+            });
+
+            aplicarFiltros(); 
+
+            // Si trajimos menos de 50, significa que ya no hay más ventas en la nube
+            if (snapshot.docs.length < LIMITE_POR_CARGA) {
+                document.getElementById('btn-cargar-mas').style.display = 'none';
+            } else {
+                document.getElementById('btn-cargar-mas').style.display = 'flex';
+            }
+
+        } catch (error) {
+            console.error("Error descargando ventas de Firebase:", error);
+            document.getElementById('ventas-container').innerHTML = `
+                <div class="empty-state" style="border-color: #fca5a5; color: #b91c1c;">
+                    <span class="material-icons-outlined" style="font-size: 32px; margin-bottom: 10px;">cloud_off</span>
+                    <p>Error de conexión al cargar el historial.</p>
+                </div>`;
+            mostrarAlerta("Error de Conexión", "No se pudieron cargar las ventas desde la nube. Revisa tus reglas de Firebase.", "error");
+        }
+    }
+
+    function cargarMasVentas() {
+        const btn = document.getElementById('btn-cargar-mas');
+        btn.innerHTML = `<span class="material-icons-outlined" style="animation: spin 1s linear infinite;">autorenew</span> Cargando...`;
+        btn.disabled = true;
+
+        cargarHistorial().then(() => {
+            btn.innerHTML = `<span class="material-icons-outlined">expand_more</span> Cargar 50 ventas más antiguas`;
+            btn.disabled = false;
+        });
+    }
+
+    // ==========================================
+    // INICIALIZACIÓN Y GUARDIÁN
     // ==========================================
     window.onload = async () => {
         // --- INICIO DEL GUARDIÁN ---
@@ -517,25 +585,8 @@
         const hoy = new Date();
         document.getElementById('txt-fecha').innerHTML = `Generado: <strong>${hoy.toLocaleDateString('es-PE')}</strong>`;
         
-        try {
-            // Descargar todas las ventas de la nube, ordenadas de la más nueva a la más antigua
-            const snapshot = await db.collection('ventas').orderBy('id', 'desc').get();
-            
-            globalVentas = [];
-            snapshot.forEach(doc => {
-                globalVentas.push(doc.data());
-            });
-
-            aplicarFiltros(); 
-        } catch (error) {
-            console.error("Error descargando ventas de Firebase:", error);
-            document.getElementById('ventas-container').innerHTML = `
-                <div class="empty-state" style="border-color: #fca5a5; color: #b91c1c;">
-                    <span class="material-icons-outlined" style="font-size: 32px; margin-bottom: 10px;">cloud_off</span>
-                    <p>Error de conexión al cargar el historial.</p>
-                </div>`;
-            mostrarAlerta("Error de Conexión", "No se pudieron cargar las ventas desde la nube.", "error");
-        }
+        // Iniciar la descarga de las primeras 50 ventas
+        cargarHistorial();
     };
 </script>
 
