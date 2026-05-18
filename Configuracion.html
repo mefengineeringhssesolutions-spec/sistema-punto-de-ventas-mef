@@ -495,7 +495,7 @@
     }
 
     // ==========================================
-    // SISTEMA DE BACKUP BLINDADO (NUEVA VERSIÓN)
+    // SISTEMA DE BACKUP BLINDADO Y DETECTOR DE APP
     // ==========================================
     async function exportarBackup() {
         mostrarToast("Compilando toda la base de datos...");
@@ -517,33 +517,28 @@
             const clientesSnap = await db.collection('clientes').get();
             clientesSnap.forEach(doc => backup.clientes.push(doc.data()));
 
-            // Añadimos los usuarios para que no pierdas a tus vendedores
             backup.usuarios = [];
             const usuSnap = await db.collection('usuarios').get();
             usuSnap.forEach(doc => backup.usuarios.push(doc.data()));
 
-            const dataStr = JSON.stringify(backup, null, 2);
-            const fileName = `MME_Backup_${new Date().toISOString().split('T')[0]}.json`;
-            
-            // TRUCO: Usamos Blob en lugar de File (evita bloqueos del navegador de Flutter)
-            const blob = new Blob([dataStr], { type: 'application/json' });
+            // 1. DETECTOR DE APLICACIÓN MÓVIL (WEBVIEW)
+            // Esto evita que la aplicación de Flutter colapse al intentar descargar
+            const userAgent = navigator.userAgent.toLowerCase();
+            const esAppNativa = userAgent.includes('wv') || (userAgent.includes('android') && userAgent.includes('version/'));
 
-            try {
-                // Intento 1: Compartir por menú de Android/iOS
-                const fileToShare = new File([blob], fileName, { type: 'application/json' });
-                if (navigator.canShare && navigator.canShare({ files: [fileToShare] })) {
-                    await navigator.share({
-                        title: 'Respaldo Base de Datos MME',
-                        text: 'Archivo JSON con la copia de seguridad.',
-                        files: [fileToShare]
-                    });
-                    return mostrarToast("Respaldo enviado exitosamente.");
-                }
-            } catch(shareError) {
-                console.log("Webview bloqueó el share nativo. Pasando a Plan B...");
+            if (esAppNativa) {
+                return mostrarAlerta(
+                    "Acción de Administrador", 
+                    "Por seguridad de Android, la aplicación móvil bloquea las descargas de archivos de respaldo.\n\nPara descargar su Base de Datos, por favor abra su enlace web directamente en Google Chrome o desde una Computadora.", 
+                    "info"
+                );
             }
 
-            // PLAN B: Descarga automática directa (Seguro para PC y WebViews)
+            // 2. SI ES PC O NAVEGADOR NORMAL -> DESCARGAMOS EL ARCHIVO
+            const dataStr = JSON.stringify(backup, null, 2);
+            const fileName = `MME_Backup_${new Date().toISOString().split('T')[0]}.json`;
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement("a");
             link.href = url;
