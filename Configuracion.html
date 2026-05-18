@@ -370,9 +370,6 @@
         );
     }
 
-    // ==========================================
-    // SISTEMA VISUAL DE ALERTAS
-    // ==========================================
     function mostrarAlerta(titulo, mensaje, tipo = 'error') {
         const modal = document.getElementById('modal-alerta');
         const header = document.getElementById('alerta-header');
@@ -397,9 +394,6 @@
         setTimeout(() => toast.style.display = 'none', 2500);
     }
 
-    // ==========================================
-    // GESTOR DINÁMICO DE CATÁLOGOS
-    // ==========================================
     const listasCatalogos = { almacenes: [], categorias: [], unidades: [] };
 
     function renderizarCatalogos() {
@@ -446,9 +440,6 @@
         } catch(e) { console.error("Fallo al guardar catálogo en la nube", e); }
     };
 
-    // ==========================================
-    // LÓGICA DE CONFIGURACIÓN GLOBAL (FIREBASE)
-    // ==========================================
     function cargarConfiguracionVisual(cfg) {
         document.getElementById('cfg-empresa').value = cfg.empresa || "";
         document.getElementById('cfg-ruc').value = cfg.ruc || "";
@@ -504,64 +495,75 @@
     }
 
     // ==========================================
-    // SISTEMA DE BACKUP TOTAL Y RESTAURACIÓN (ACTUALIZADO PARA MÓVIL Y PC)
+    // SISTEMA DE BACKUP BLINDADO (NUEVA VERSIÓN)
     // ==========================================
     async function exportarBackup() {
         mostrarToast("Compilando toda la base de datos...");
         try {
             const backup = { fechaRespaldo: new Date().toISOString() };
 
-            // 1. Descargar Configuración
             const docConf = await configRef.get();
             backup.configuracion = docConf.exists ? docConf.data() : {};
 
-            // 2. Descargar Productos
             backup.productos = [];
             const prodSnap = await db.collection('productos').get();
             prodSnap.forEach(doc => backup.productos.push(doc.data()));
 
-            // 3. Descargar Ventas
             backup.ventas = [];
             const ventasSnap = await db.collection('ventas').get();
             ventasSnap.forEach(doc => backup.ventas.push(doc.data()));
 
-            // 4. Descargar Clientes
             backup.clientes = [];
             const clientesSnap = await db.collection('clientes').get();
             clientesSnap.forEach(doc => backup.clientes.push(doc.data()));
 
-            // Generar archivo JSON
+            // Añadimos los usuarios para que no pierdas a tus vendedores
+            backup.usuarios = [];
+            const usuSnap = await db.collection('usuarios').get();
+            usuSnap.forEach(doc => backup.usuarios.push(doc.data()));
+
             const dataStr = JSON.stringify(backup, null, 2);
             const fileName = `MME_Backup_${new Date().toISOString().split('T')[0]}.json`;
-            const file = new File([dataStr], fileName, { type: 'application/json' });
+            
+            // TRUCO: Usamos Blob en lugar de File (evita bloqueos del navegador de Flutter)
+            const blob = new Blob([dataStr], { type: 'application/json' });
 
-            // TRUCO MÓVIL: Detectamos si el dispositivo permite compartir archivos nativamente (Android/iOS)
-            if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                await navigator.share({
-                    title: 'Respaldo Base de Datos MME',
-                    text: 'Archivo JSON con la copia de seguridad de todo el sistema.',
-                    files: [file]
-                });
-                mostrarToast("Respaldo enviado exitosamente.");
-            } else {
-                // SISTEMA PC: Si no es un celular, lo descarga como archivo normal
-                const url = URL.createObjectURL(file);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = fileName;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-                mostrarToast("Copia de seguridad descargada exitosamente.");
+            try {
+                // Intento 1: Compartir por menú de Android/iOS
+                const fileToShare = new File([blob], fileName, { type: 'application/json' });
+                if (navigator.canShare && navigator.canShare({ files: [fileToShare] })) {
+                    await navigator.share({
+                        title: 'Respaldo Base de Datos MME',
+                        text: 'Archivo JSON con la copia de seguridad.',
+                        files: [fileToShare]
+                    });
+                    return mostrarToast("Respaldo enviado exitosamente.");
+                }
+            } catch(shareError) {
+                console.log("Webview bloqueó el share nativo. Pasando a Plan B...");
             }
+
+            // PLAN B: Descarga automática directa (Seguro para PC y WebViews)
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            mostrarToast("Copia de seguridad descargada exitosamente.");
+
         } catch(e) {
             console.error("Error en backup:", e);
-            mostrarAlerta("Error de Respaldo", "No se pudo generar o compartir el archivo de respaldo.", "error");
+            mostrarAlerta("Error Crítico", "No se pudo compilar la base de datos de Firebase. Verifique su red.", "error");
         }
     }
 
-    // Función definitiva: Importación por Lotes (Evita pérdida de datos)
+    // ==========================================
+    // IMPORTACIÓN POR LOTES RESTAURADA
+    // ==========================================
     function procesarArchivoImportacion(event) {
         const file = event.target.files[0];
         if (!file) return;
@@ -572,11 +574,9 @@
                 const data = JSON.parse(e.target.result);
                 mostrarToast("Empaquetando datos para envío seguro...");
                 
-                // CREAMOS UN LOTE DE FIREBASE (Máximo 500 operaciones por viaje)
                 const batch = db.batch();
                 let cantidadOperaciones = 0;
 
-                // 1. Restaurar Configuración
                 let configFinal = data.configuracion || data.config || {};
                 if (data.catalogos) {
                     configFinal.almacenes = data.catalogos.almacenes || [];
@@ -589,61 +589,52 @@
                     cantidadOperaciones++;
                 }
 
-                // 2. Restaurar Productos
                 const listaProductos = data.productos || data.ingresos || [];
                 if (Array.isArray(listaProductos)) {
                     listaProductos.forEach(p => {
                         const idDoc = p.codigo || p.cod || p.id;
                         if (idDoc) {
-                            const docRef = db.collection('productos').doc(idDoc);
-                            batch.set(docRef, p);
+                            batch.set(db.collection('productos').doc(idDoc), p);
                             cantidadOperaciones++;
                         }
                     });
                 }
 
-                // 3. Restaurar Ventas
                 if (data.ventas && Array.isArray(data.ventas)) {
                     data.ventas.forEach(v => {
                         if (v.id) {
-                            const docRef = db.collection('ventas').doc(v.id);
-                            batch.set(docRef, v);
+                            batch.set(db.collection('ventas').doc(v.id), v);
                             cantidadOperaciones++;
                         }
                     });
                 }
 
-                // 4. Restaurar Clientes
                 if (data.clientes && Array.isArray(data.clientes)) {
                     data.clientes.forEach(c => {
                         const idCliente = c.dni || c.id;
                         if (idCliente) {
-                            const docRef = db.collection('clientes').doc(idCliente);
-                            batch.set(docRef, c);
+                            batch.set(db.collection('clientes').doc(idCliente), c);
                             cantidadOperaciones++;
                         }
                     });
                 }
 
-                // 5. Restaurar Usuarios
                 if (data.usuarios && Array.isArray(data.usuarios)) {
                     data.usuarios.forEach(u => {
                         const idUser = u.dni || u.id;
                         if (idUser) {
-                            const docRef = db.collection('usuarios').doc(idUser);
-                            batch.set(docRef, u);
+                            batch.set(db.collection('usuarios').doc(idUser), u);
                             cantidadOperaciones++;
                         }
                     });
                 }
 
                 if(cantidadOperaciones === 0) {
-                   return mostrarAlerta("Archivo Vacío o Incompatible", "No se encontraron datos válidos.", "warning");
+                   return mostrarAlerta("Archivo Vacío", "No se encontraron datos válidos.", "warning");
                 }
 
                 mostrarToast(`Subiendo paquete masivo de ${cantidadOperaciones} registros...`);
 
-                // ENVIAMOS LA CAJA COMPLETA A FIREBASE (Todo o nada)
                 await batch.commit();
                 
                 mostrarAlerta("Restauración Exitosa", `Se han inyectado los ${cantidadOperaciones} registros en la Nube correctamente y sin pérdidas.`, "success");
@@ -652,14 +643,14 @@
 
             } catch (error) {
                 console.error(error);
-                mostrarAlerta("Error de Red", "El archivo es válido, pero falló la conexión al inyectar el lote.", "error");
+                mostrarAlerta("Error", "El archivo es válido, pero falló la conexión al inyectar el lote.", "error");
             }
         };
         reader.readAsText(file);
     }
 
     // ==========================================
-    // LIMPIEZA ABSOLUTA DEL SISTEMA (BORRADO TOTAL EN FIREBASE - CON LOTES)
+    // LIMPIEZA ABSOLUTA DEL SISTEMA POR LOTES
     // ==========================================
     function abrirModalLimpieza() { document.getElementById('modal-danger').style.display = 'flex'; }
     function cerrarModalLimpieza() { document.getElementById('modal-danger').style.display = 'none'; }
@@ -672,26 +663,22 @@
             const batch = db.batch();
             let cantidadBorrados = 0;
 
-            // 1. Obtener y preparar el borrado de TODOS los productos
             const productosSnap = await db.collection('productos').get();
             productosSnap.forEach(doc => {
                 batch.delete(doc.ref);
                 cantidadBorrados++;
             });
 
-            // 2. Obtener y preparar el borrado de TODAS las ventas (incluidas las anuladas)
             const ventasSnap = await db.collection('ventas').get();
             ventasSnap.forEach(doc => {
                 batch.delete(doc.ref);
                 cantidadBorrados++;
             });
 
-            // 3. Ejecutar el borrado masivo solo si hay algo que borrar
             if (cantidadBorrados > 0) {
                 await batch.commit();
             }
             
-            // Limpiar caché local
             localStorage.removeItem('isa_ingresos_db'); 
 
             mostrarAlerta("Sistema en Cero", "Todo el inventario y el historial completo de ventas han sido eliminados de la nube permanentemente.", "success");
