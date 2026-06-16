@@ -6,8 +6,7 @@
     <title>M.E.F. - Registrar Usuario</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="api.js"></script>
     <script src="seguridad.js"></script>
     
     <style>
@@ -192,18 +191,6 @@
     </div>
 
 <script>
-    // 1. INICIALIZAR FIREBASE CON TUS LLAVES MAESTRAS
-    const firebaseConfig = {
-        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
-        authDomain: "pos-mef-ventas.firebaseapp.com",
-        projectId: "pos-mef-ventas",
-        storageBucket: "pos-mef-ventas.firebasestorage.app",
-        messagingSenderId: "704671042289",
-        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
     // ==========================================
     // SISTEMA VISUAL DE ALERTAS
     // ==========================================
@@ -254,7 +241,7 @@
     }
 
     // ==========================================
-    // GUARDADO DIRECTO A LA NUBE (FIREBASE)
+    // GUARDADO DIRECTO EN TU SERVIDOR POSTGRESQL
     // ==========================================
     async function guardarUsuario() {
         const dni = document.getElementById('in-dni').value.trim();
@@ -281,31 +268,23 @@
         btnGuardar.disabled = true;
         btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 18px;">cloud_upload</span> SUBIENDO...`;
 
+        const nuevoUsuario = { dni, nombre, rol, celular, estado, password };
+
         try {
-            // Validar si el DNI ya existe en la Nube
-            const snapshot = await db.collection('usuarios').where('dni', '==', dni).get();
-            
-            if (!snapshot.empty) {
+            // Mandamos los datos a tu servidor Core i5
+            const respuesta = await fetch(`${API_BASE_URL}/usuarios`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(nuevoUsuario)
+            });
+
+            const data = await respuesta.json();
+
+            if (!respuesta.ok) {
                 btnGuardar.disabled = false;
                 btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 18px;">save</span> GUARDAR USUARIO`;
-                return mostrarAlerta("Usuario Duplicado", `El DNI ${dni} ya está trabajando en la empresa.`);
+                return mostrarAlerta("Atención", data.error || "Error al registrar el usuario en el servidor.");
             }
-
-            // Crear el objeto del nuevo usuario
-            const idGenerado = "USR-" + Date.now().toString().slice(-6);
-            const nuevoUsuario = {
-                id: idGenerado, 
-                dni: dni,
-                nombre: nombre,
-                rol: rol,
-                celular: celular,
-                estado: estado,
-                password: password,
-                fechaRegistro: new Date().toISOString()
-            };
-            
-            // Subir a Firebase
-            await db.collection('usuarios').doc(idGenerado).set(nuevoUsuario);
 
             // Mostrar notificación visual
             const toast = document.getElementById('toast');
@@ -318,7 +297,7 @@
 
         } catch (error) {
             console.error("Error al registrar usuario:", error);
-            mostrarAlerta("Error de Conexión", "No se pudo registrar al usuario en la Nube. Verifique su internet.");
+            mostrarAlerta("Error de Red", "No se pudo contactar con el servidor. Verifique que la Core i5 esté encendida.");
             btnGuardar.disabled = false;
             btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 18px;">save</span> GUARDAR USUARIO`;
         }
