@@ -7,8 +7,7 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="api.js"></script>
     <script src="seguridad.js"></script>
     <style>
         /* ==========================================
@@ -139,10 +138,9 @@
                     <span class="material-icons-round" style="font-size: 16px;">manage_search</span> Filtros de Búsqueda
                 </div>
                 <div class="search-grid">
-                    <input type="text" id="filtro-doc" class="search-input" placeholder="N° Factura/Boleta" onkeyup="aplicarFiltros()">
                     <input type="date" id="filtro-fecha" class="search-input" onchange="aplicarFiltros()" title="Buscar por fecha">
                     <input type="text" id="filtro-codigo" class="search-input" placeholder="Código SKU" onkeyup="aplicarFiltros()">
-                    <input type="text" id="filtro-nombre" class="search-input" placeholder="Nombre de Producto" onkeyup="aplicarFiltros()">
+                    <input type="text" id="filtro-nombre" class="search-input" placeholder="Nombre de Producto" onkeyup="aplicarFiltros()" style="grid-column: span 2;">
                 </div>
                 <button type="button" class="btn-limpiar" onclick="limpiarFiltros()">
                     <span class="material-icons-outlined" style="font-size: 14px;">filter_alt_off</span> Limpiar Filtros
@@ -183,21 +181,8 @@
 <script>
     'use strict';
 
-    // 1. INICIALIZAR FIREBASE
-    const firebaseConfig = {
-        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
-        authDomain: "pos-mef-ventas.firebaseapp.com",
-        projectId: "pos-mef-ventas",
-        storageBucket: "pos-mef-ventas.firebasestorage.app",
-        messagingSenderId: "704671042289",
-        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
-    // Variable global para almacenar los datos descargados de Firebase
+    // Variable global para almacenar los datos descargados del servidor
     let globalProductos = [];
-
     let confirmCallback = null;
 
     function mostrarConfirmacion(mensaje, callback) {
@@ -251,16 +236,19 @@
         }
 
         datos.forEach((item) => {
-            const costoLote = parseFloat(item.costoTotalUSD || item.costoTotalPEN || item.costoTotal) || 0;
+            const costoLote = parseFloat(item.costo_total_usd || item.costoTotalUSD) || 0;
             const cantidad = parseFloat(item.cant) || 0;
-            const precioSug = parseFloat(item.precioUnitarioPEN) || 0;
+            const precioSug = parseFloat(item.precio_unitario_pen || item.precioUnitarioPEN) || 0;
             
             const nombreSeguro = item.nombre || "SIN NOMBRE";
-            const codSeguro = item.cod || "SIN CODIGO";
+            const codSeguro = item.codigo || item.cod || "SIN CODIGO";
             const categoriaSegura = item.categoria || "N/A";
             const almacenSeguro = item.almacen || "N/A";
             
-            let fechaMostrada = item.fecha || "--/--/----";
+            let fechaMostrada = item.fecha_ingreso || item.fecha || "--/--/----";
+            if(fechaMostrada.includes('T')) {
+                fechaMostrada = fechaMostrada.split('T')[0]; // Extraer solo la fecha de Postgres
+            }
             if(fechaMostrada.includes('-')) {
                 const [yyyy, mm, dd] = fechaMostrada.split('-');
                 fechaMostrada = `${dd}/${mm}/${yyyy}`;
@@ -276,7 +264,7 @@
             card.className = `entry-card ${item.anulado ? 'anulado' : ''}`;
             card.innerHTML = `
                 <div class="entry-card-header">
-                    <span class="doc-id"><span class="material-icons-outlined" style="font-size: 14px;">receipt_long</span> ${item.doc || "S/D"}</span>
+                    <span class="doc-id"><span class="material-icons-outlined" style="font-size: 14px;">receipt_long</span> INGRESO ALMACÉN</span>
                     <span class="date">${fechaMostrada}</span>
                 </div>
                 
@@ -302,8 +290,8 @@
 
                 <div class="entry-card-footer">
                     ${item.anulado 
-                        ? `<span class="badge-anulado">REGISTRO ANULADO</span>` 
-                        : `<button class="btn-delete" onclick="anularEntrada('${item.cod}')" title="Anular este registro de la nube">
+                        ? `<span class="badge-anulado">PRODUCTO ANULADO</span>` 
+                        : `<button class="btn-delete" onclick="anularEntrada('${codSeguro}')" title="Anular este registro del servidor">
                                <span class="material-icons-outlined" style="font-size: 16px;">block</span> Anular
                            </button>`
                     }
@@ -321,27 +309,28 @@
     // BÚSQUEDA Y FILTROS (EN MEMORIA)
     // ==========================================
     function aplicarFiltros() {
-        const valDoc = document.getElementById('filtro-doc').value.toLowerCase().trim();
         let valFecha = document.getElementById('filtro-fecha').value; 
         const valCodigo = document.getElementById('filtro-codigo').value.toLowerCase().trim();
         const valNombre = document.getElementById('filtro-nombre').value.toLowerCase().trim();
 
         const datosFiltrados = globalProductos.filter(item => {
-            const matchDoc = (item.doc || "").toString().toLowerCase().includes(valDoc);
-            const matchCodigo = (item.cod || "").toString().toLowerCase().includes(valCodigo);
+            const matchCodigo = (item.codigo || item.cod || "").toString().toLowerCase().includes(valCodigo);
             const matchNombre = (item.nombre || "").toString().toLowerCase().includes(valNombre);
             
             let matchFecha = true;
-            if (valFecha !== "") { matchFecha = (item.fecha === valFecha); }
+            if (valFecha !== "") { 
+                let fechaItem = item.fecha_ingreso || item.fecha || "";
+                if(fechaItem.includes('T')) fechaItem = fechaItem.split('T')[0];
+                matchFecha = (fechaItem === valFecha); 
+            }
             
-            return matchDoc && matchFecha && matchCodigo && matchNombre;
+            return matchFecha && matchCodigo && matchNombre;
         });
 
         renderizarEntradas(datosFiltrados);
     }
 
     function limpiarFiltros() {
-        document.getElementById('filtro-doc').value = '';
         document.getElementById('filtro-fecha').value = '';
         document.getElementById('filtro-codigo').value = '';
         document.getElementById('filtro-nombre').value = '';
@@ -349,37 +338,41 @@
     }
 
     // ==========================================
-    // ANULACIÓN EN LA NUBE FIREBASE
+    // ANULACIÓN EN EL SERVIDOR LOCAL (POSTGRESQL)
     // ==========================================
     function anularEntrada(codigoProducto) {
         mostrarConfirmacion(
-            "¿Está seguro que desea ANULAR este ingreso?\n\nEl registro pasará a estado inactivo en Firebase y dejará de sumar dinero y stock en el inventario general.",
+            "¿Está seguro que desea ANULAR este ingreso?\n\nEl producto pasará a estado inactivo en el servidor local y dejará de sumar dinero y stock en el inventario general.",
             async () => {
-                mostrarToast("Anulando en la nube...");
+                mostrarToast("Anulando en el servidor...");
                 try {
-                    // Actualizar en Firebase
-                    await db.collection('productos').doc(codigoProducto).update({
-                        anulado: true
+                    // Actualizar estado en el servidor Core i5
+                    const respuesta = await fetch(`${API_BASE_URL}/productos/${codigoProducto}/anular`, {
+                        method: 'PUT'
                     });
 
-                    // Actualizar el array local para no tener que recargar toda la página
+                    if (!respuesta.ok) {
+                        throw new Error("No se pudo anular en el servidor");
+                    }
+
+                    // Actualizar el array local para no recargar toda la página
                     globalProductos = globalProductos.map(item => {
-                        if(item.cod === codigoProducto) { item.anulado = true; }
+                        if(item.codigo === codigoProducto || item.cod === codigoProducto) { item.anulado = true; }
                         return item;
                     });
                     
-                    aplicarFiltros(); // Recarga la vista con los KPIs recalculados
+                    aplicarFiltros(); 
                     mostrarToast("Ingreso anulado correctamente.");
                 } catch (error) {
                     console.error("Error al anular:", error);
-                    alert("Hubo un error al intentar anular el producto. Revise su conexión.");
+                    alert("Hubo un error al intentar anular el producto. Revise que la Core i5 esté encendida.");
                 }
             }
         );
     }
 
     // ==========================================
-    // DESCARGAR DATOS DESDE FIREBASE AL INICIAR
+    // DESCARGAR DATOS DESDE EL SERVIDOR AL INICIAR
     // ==========================================
     window.onload = async () => {
         // --- INICIO DEL GUARDIÁN ---
@@ -402,22 +395,24 @@
         document.getElementById('txt-fecha').innerHTML = `Generado: <strong>${hoy.toLocaleDateString('es-PE')}</strong>`;
         
         try {
-            // Descargar productos desde Firebase ordenados por fecha
-            const snapshot = await db.collection('productos').orderBy('fecha', 'desc').get();
+            // Descargar productos desde el Servidor Local
+            const respuesta = await fetch(`${API_BASE_URL}/productos`);
             
-            globalProductos = [];
-            snapshot.forEach(doc => {
-                globalProductos.push(doc.data());
-            });
+            if (!respuesta.ok) throw new Error("Fallo de conexión");
+
+            globalProductos = await respuesta.json();
+
+            // Ordenamos por fecha descendente
+            globalProductos.sort((a, b) => new Date(b.fecha_ingreso) - new Date(a.fecha_ingreso));
 
             renderizarEntradas(globalProductos);
         } catch (error) {
-            console.error("Error descargando productos de Firebase:", error);
+            console.error("Error descargando productos del servidor:", error);
             document.getElementById('entradas-container').innerHTML = `
                 <div class="empty-state" style="color: var(--danger); border-color: var(--danger);">
                     <span class="material-icons-round" style="font-size: 40px;">cloud_off</span>
                     <p style="margin-top: 10px; font-weight: 700;">Error de Conexión</p>
-                    <p style="font-size: 12px; margin-top: 4px;">No se pudo conectar a la base de datos en la nube.</p>
+                    <p style="font-size: 12px; margin-top: 4px;">No se pudo conectar al servidor local Core i5.</p>
                 </div>
             `;
         }
