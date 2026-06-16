@@ -6,8 +6,7 @@
     <title>MME - Punto de Ventas</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="api.js"></script>
     <script src="seguridad.js"></script>
     
     <style>
@@ -64,8 +63,8 @@
         .cart-table th { position: sticky; top: 0; background: #fafbfb; text-align: left; padding: 10px 8px; font-size: 12px; color: var(--p-text-subdued); border-bottom: 1px solid var(--p-border); z-index: 2;}
         .cart-table td { padding: 10px 8px; border-bottom: 1px solid #f0f2f4; vertical-align: middle; }
 
-        .payment-methods { display: flex; gap: 10px; margin-top: 5px; }
-        .pay-btn { flex: 1; background: #f4f6f8; border: 1px solid var(--p-border); padding: 8px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.2s; color: var(--p-text-subdued); font-weight: 600; font-size: 12px; }
+        .payment-methods { display: flex; gap: 10px; margin-top: 5px; flex-wrap: wrap; }
+        .pay-btn { flex: 1; min-width: 80px; background: #f4f6f8; border: 1px solid var(--p-border); padding: 8px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.2s; color: var(--p-text-subdued); font-weight: 600; font-size: 12px; }
         .pay-btn.active { background: var(--p-action-primary); color: white; border-color: var(--p-action-primary); }
 
         .ticket-box { background: #fafbfb; border: 1px solid var(--p-border); border-radius: 6px; padding: 16px; margin-top: 10px;}
@@ -171,6 +170,7 @@
                         <button type="button" class="pay-btn active" onclick="seleccionarPago(this)" data-tipo="Efectivo"><span class="material-icons-outlined" style="font-size: 16px;">payments</span> Efectivo</button>
                         <button type="button" class="pay-btn" onclick="seleccionarPago(this)" data-tipo="Tarjeta"><span class="material-icons-outlined" style="font-size: 16px;">credit_card</span> Tarjeta</button>
                         <button type="button" class="pay-btn" onclick="seleccionarPago(this)" data-tipo="Yape/Plin"><span class="material-icons-outlined" style="font-size: 16px;">qr_code</span> Yape/Plin</button>
+                        <button type="button" class="pay-btn" onclick="seleccionarPago(this)" data-tipo="EcoPoints"><span class="material-icons-outlined" style="font-size: 16px; color: #108043;">eco</span> EcoPoints</button>
                     </div>
                 </div>
 
@@ -275,18 +275,6 @@
 <script src="ticket.js"></script>
 
 <script>
-    // 1. INICIALIZAR FIREBASE
-    const firebaseConfig = {
-        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
-        authDomain: "pos-mef-ventas.firebaseapp.com",
-        projectId: "pos-mef-ventas",
-        storageBucket: "pos-mef-ventas.firebasestorage.app",
-        messagingSenderId: "704671042289",
-        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
     // Variables Globales
     let carrito = []; 
     let subtotalVenta = 0;
@@ -296,7 +284,7 @@
     let descuentoPorcentaje = 0; 
     let descuentoMonto = 0;      
     
-    // Variables de Configuración Dinámica (Nube)
+    // Configuración Inicial
     let cfgGlobal = { igv: 18, bolsa: 0.50, descmax: 50 };
     
     let idVendedorActual = "";
@@ -304,42 +292,40 @@
 
     window.onload = () => {
         cargarDatosSesion();
-        cargarConfiguracionGlobal(); // Consulta Firebase
+        cargarConfiguracionGlobal(); // Consulta al servidor local
         actualizarFechaHora();
         setInterval(actualizarFechaHora, 60000); 
-        generarCorrelativoBoleta(); // Consulta Firebase
+        generarCorrelativoBoleta(); // Consulta al servidor local
     };
 
-    // ==========================================
-    // FUNCION FALTANTE: MOSTRAR TOAST
-    // ==========================================
     function mostrarToast(mensaje) {
         const toast = document.getElementById('toast');
         document.getElementById('toast-msg').innerText = mensaje;
         toast.style.display = 'flex';
-        // Lo ocultamos automáticamente después de 2 segundos si no hay otro proceso
         setTimeout(() => { toast.style.display = 'none'; }, 2000);
     }
 
     // ==========================================
-    // INTEGRACIÓN DINÁMICA CON CONFIGURACIÓN
+    // INTEGRACIÓN DINÁMICA CON SERVIDOR LOCAL
     // ==========================================
     async function cargarConfiguracionGlobal() {
         try {
-            const configSnap = await db.collection('sistema').doc('configuracion').get();
-            if(configSnap.exists) {
-                const data = configSnap.data();
-                cfgGlobal.igv = parseFloat(data.igv) || 0;
-                cfgGlobal.bolsa = parseFloat(data.bolsa) || 0;
-                cfgGlobal.descmax = parseFloat(data.descmax) || 0;
+            const respuesta = await fetch(`${API_BASE_URL}/configuracion`);
+            if (respuesta.ok) {
+                const configData = await respuesta.json();
+                if (configData.length > 0) {
+                    cfgGlobal.igv = parseFloat(configData[0].igv) || 18;
+                    cfgGlobal.bolsa = parseFloat(configData[0].bolsa) || 0.50;
+                    cfgGlobal.descmax = parseFloat(configData[0].descmax) || 50;
+                }
             }
             document.getElementById('lbl-igv-tax').innerText = `IGV (${cfgGlobal.igv}%)`;
             document.getElementById('lbl-bolsa-tax').innerText = `Bolsa (S/. ${cfgGlobal.bolsa.toFixed(2)})`;
-            document.getElementById('lbl-max-desc').innerText = `Máximo permitido en configuración: ${cfgGlobal.descmax}%`;
+            document.getElementById('lbl-max-desc').innerText = `Máximo permitido: ${cfgGlobal.descmax}%`;
             document.getElementById('in-porcentaje-descuento').max = cfgGlobal.descmax;
         } catch (error) {
-            console.error("Error al cargar configuración de Firebase:", error);
-            mostrarAlerta("Advertencia", "No se pudo cargar la configuración de impuestos de la nube.", "warning");
+            console.error("Error al cargar configuración:", error);
+            mostrarAlerta("Advertencia", "No se pudo cargar la configuración de impuestos del servidor.", "warning");
         }
     }
 
@@ -432,15 +418,9 @@
 
     async function generarCorrelativoBoleta() {
         try {
-            const snapshot = await db.collection('ventas').orderBy('id', 'desc').limit(1).get();
-            let siguienteBoleta = 1;
-            
-            if (!snapshot.empty) {
-                const ultimaVenta = snapshot.docs[0].data();
-                siguienteBoleta = parseInt(ultimaVenta.boleta) + 1;
-                if(isNaN(siguienteBoleta)) siguienteBoleta = snapshot.size + 1; 
-            }
-            document.getElementById('bar-boleta').innerText = siguienteBoleta.toString().padStart(6, '0');
+            const respuesta = await fetch(`${API_BASE_URL}/ventas/correlativo`);
+            const data = await respuesta.json();
+            document.getElementById('bar-boleta').innerText = data.siguienteBoleta.toString().padStart(6, '0');
         } catch (error) {
             console.error("Error al generar correlativo:", error);
             document.getElementById('bar-boleta').innerText = "000000";
@@ -448,46 +428,39 @@
     }
 
     // ==========================================
-    // BÚSQUEDA INTELIGENTE DE PRODUCTOS
+    // BÚSQUEDA INTELIGENTE DE PRODUCTOS (POSTGRESQL)
     // ==========================================
     async function buscarYAgregarProducto() {
         const inputCodigo = document.getElementById('in-codigo');
         const codigoBuscado = inputCodigo.value.trim().toUpperCase();
         if(codigoBuscado === '') return;
 
-        // ESTA ES LA LÍNEA QUE HACÍA CHOCAR EL SISTEMA AL NO EXISTIR
         mostrarToast("Buscando en inventario...");
 
         try {
-            let productoBD = null;
-
-            // 1er Intento: Buscar asumiendo que el ID del documento en Firebase es el Código
-            let docSnap = await db.collection('productos').doc(codigoBuscado).get();
+            const respuesta = await fetch(`${API_BASE_URL}/productos/${encodeURIComponent(codigoBuscado)}`);
             
-            if (docSnap.exists) {
-                productoBD = docSnap.data();
-            } else {
-                // 2do Intento: Si no es el ID del documento, buscar por el campo "codigo" internamente
-                const querySnapshot = await db.collection('productos').where('codigo', '==', codigoBuscado).limit(1).get();
-                if (!querySnapshot.empty) {
-                    productoBD = querySnapshot.docs[0].data();
-                }
+            if (!respuesta.ok) {
+                mostrarAlerta('Producto no encontrado', `El código "${codigoBuscado}" no existe en el inventario.`, 'warning');
+                inputCodigo.value = ''; return;
             }
 
-            if(!productoBD || productoBD.anulado) {
+            const productoBD = await respuesta.json();
+
+            if(productoBD.anulado) {
                 mostrarAlerta('Producto no encontrado', `El código "${codigoBuscado}" no existe en el inventario actual.`, 'warning');
                 inputCodigo.value = ''; return;
             }
 
-            const stockDisponible = parseFloat(productoBD.cant || productoBD.cantidad || productoBD.stock) || 0;
-            const nombreProd = productoBD.nombre || productoBD.descripcion || productoBD.nombreProd || "Producto sin nombre";
-            const precioProd = parseFloat(productoBD.precioUnitarioPEN || productoBD.precio || productoBD.precioVenta) || 0;
+            const stockDisponible = parseFloat(productoBD.cant) || 0;
+            const nombreProd = productoBD.nombre;
+            const precioProd = parseFloat(productoBD.precio_unitario_pen) || 0;
 
             const indexCarrito = carrito.findIndex(p => p.codigo === codigoBuscado);
             const cantidadEnCarrito = indexCarrito !== -1 ? carrito[indexCarrito].cantidad : 0;
 
             if (cantidadEnCarrito + 1 > stockDisponible) {
-                mostrarAlerta('Stock Insuficiente', `Solo te quedan ${stockDisponible} unidades disponibles de "${nombreProd}" en la base de datos.`, 'error');
+                mostrarAlerta('Stock Insuficiente', `Solo te quedan ${stockDisponible} unidades disponibles de "${nombreProd}" en almacén.`, 'error');
                 inputCodigo.value = ''; return;
             }
 
@@ -512,7 +485,7 @@
 
         } catch (error) {
             console.error("Error buscando producto:", error);
-            mostrarAlerta("Error de Conexión", "No se pudo consultar el stock en la nube.", "error");
+            mostrarAlerta("Error de Conexión", "No se pudo consultar el stock en el servidor local.", "error");
         }
     }
 
@@ -550,7 +523,7 @@
     function actualizarCantCarrito(index, nuevaCant) {
         let cant = parseFloat(nuevaCant) || 1;
         if (cant > carrito[index].stockMax) {
-            mostrarAlerta('Límite de Stock', `El máximo disponible en nube es ${carrito[index].stockMax}.`, 'warning');
+            mostrarAlerta('Límite de Stock', `El máximo disponible es ${carrito[index].stockMax}.`, 'warning');
             cant = carrito[index].stockMax;
         } else if (cant < 1) { cant = 1; }
         
@@ -561,72 +534,109 @@
 
     function eliminarDelCarrito(index) { carrito.splice(index, 1); renderizarCarrito(); }
 
+    // ==========================================
+    // BÚSQUEDA BLINDADA DE CLIENTES (CORREGIDA)
+    // ==========================================
     async function buscarCliente() {
         const dniBuscado = document.getElementById('in-dni').value.trim();
         const inputCliente = document.getElementById('in-cliente');
         
         if(dniBuscado === '') {
-            inputCliente.value = ''; inputCliente.removeAttribute('readonly'); return;
+            inputCliente.value = ''; 
+            inputCliente.removeAttribute('readonly'); 
+            return;
         }
 
-        try {
-            const docSnap = await db.collection('clientes').doc(dniBuscado).get();
+        mostrarToast("Buscando cliente...");
 
-            if(docSnap.exists) {
-                const clienteBD = docSnap.data();
-                inputCliente.value = clienteBD.nombreCompleto || clienteBD.nombre;
-                inputCliente.setAttribute('readonly', true); 
+        try {
+            let clienteEncontrado = null;
+
+            // Intento 1: Ruta rápida directa al DNI
+            const respuesta = await fetch(`${API_BASE_URL}/clientes/${dniBuscado}`);
+            
+            if(respuesta.ok) {
+                clienteEncontrado = await respuesta.json();
             } else {
-                mostrarAlerta('Cliente No Encontrado', `El DNI/RUC ${dniBuscado} no está registrado. Ingrese el nombre manualmente o agregue uno nuevo.`, 'warning');
-                inputCliente.value = 'FALTA REGISTRAR CLIENTE';
+                // Intento 2 (FALLBACK): Si la ruta directa falla, descargamos todos y filtramos.
+                // CORRECCIÓN: Usamos String() para forzar que los números y textos coincidan siempre.
+                const respuestaTodos = await fetch(`${API_BASE_URL}/clientes`);
+                if(respuestaTodos.ok) {
+                    const todosLosClientes = await respuestaTodos.json();
+                    clienteEncontrado = todosLosClientes.find(c => String(c.dni) === String(dniBuscado));
+                }
+            }
+
+            if(clienteEncontrado) {
+                // Cubrimos todas las posibles formas en las que la BD llame a la columna
+                inputCliente.value = clienteEncontrado.nombre_completo || clienteEncontrado.nombreCompleto || clienteEncontrado.nombre || "SIN NOMBRE";
+                inputCliente.setAttribute('readonly', true); 
+                document.getElementById('toast').style.display = 'none';
+            } else {
+                mostrarAlerta('Cliente No Encontrado', `El DNI/RUC ${dniBuscado} no está registrado en la base de datos. Ingrese el nombre manualmente para continuar la venta.`, 'warning');
+                inputCliente.value = '';
                 inputCliente.removeAttribute('readonly'); 
-                inputCliente.focus(); inputCliente.select();
+                inputCliente.focus(); 
             }
         } catch (error) {
             console.error("Error buscando cliente:", error);
             inputCliente.removeAttribute('readonly'); 
+            mostrarAlerta('Error de Conexión', 'No se pudo conectar con el servidor para buscar al cliente.', 'error');
         }
     }
 
     // ==========================================
-    // CÁLCULO PRECISO Y CORRECCIÓN DE DECIMALES
+    // CÁLCULO PRECISO (INGENIERÍA INVERSA IGV)
     // ==========================================
     function validarYCalcular() {
-        subtotalVenta = carrito.reduce((sum, item) => sum + item.subtotal, 0);
+        // 1. Suma de la tabla de productos (PRECIO FINAL EN VITRINA, YA INCLUYE IGV)
+        let sumaBruta = carrito.reduce((sum, item) => sum + item.subtotal, 0);
         
-        descuentoMonto = subtotalVenta * (descuentoPorcentaje / 100);
-        let baseImponible = subtotalVenta - descuentoMonto;
-        let tempTotal = baseImponible;
-
+        // 2. Calculamos descuento si lo hay (sobre la suma bruta)
+        descuentoMonto = sumaBruta * (descuentoPorcentaje / 100);
+        let totalNetoProductos = sumaBruta - descuentoMonto;
+        
+        // 3. Extraemos IGV hacia atrás (Ingeniería Inversa)
         const rowIgv = document.getElementById('row-igv');
-        if(document.getElementById('chk-igv').checked && baseImponible > 0) {
-            igvMonto = baseImponible * (cfgGlobal.igv / 100);
-            tempTotal += igvMonto;
+        if (document.getElementById('chk-igv').checked && totalNetoProductos > 0) {
+            let factorIGV = 1 + (cfgGlobal.igv / 100);
+            subtotalVenta = totalNetoProductos / factorIGV; // Base Imponible (Subtotal real)
+            igvMonto = totalNetoProductos - subtotalVenta;
+            
             document.getElementById('ticket-igv').innerText = `S/. ${igvMonto.toFixed(2)}`;
             rowIgv.style.display = 'flex';
         } else {
-            igvMonto = 0; rowIgv.style.display = 'none';
+            subtotalVenta = totalNetoProductos; // Si no hay IGV marcado
+            igvMonto = 0; 
+            rowIgv.style.display = 'none';
         }
 
+        // 4. Bolsa Plástica (Se suma por separado al final)
         const rowBolsa = document.getElementById('row-bolsa');
-        if(document.getElementById('chk-ibcper').checked) {
+        if (document.getElementById('chk-ibcper').checked) {
             bolsaMonto = cfgGlobal.bolsa;
-            tempTotal += bolsaMonto;
             document.getElementById('ticket-bolsa').innerText = `S/. ${bolsaMonto.toFixed(2)}`;
             rowBolsa.style.display = 'flex';
         } else {
-            bolsaMonto = 0; rowBolsa.style.display = 'none';
+            bolsaMonto = 0; 
+            rowBolsa.style.display = 'none';
         }
 
+        // 5. Mostrar Descuento
         const rowDescuento = document.getElementById('row-descuento');
-        if(descuentoPorcentaje > 0) {
+        if (descuentoPorcentaje > 0) {
             document.getElementById('ticket-descuento').innerText = `-S/. ${descuentoMonto.toFixed(2)}`;
             document.getElementById('label-descuento').innerText = `Descuento Autorizado (${descuentoPorcentaje}%):`;
             rowDescuento.style.display = 'flex';
-        } else { rowDescuento.style.display = 'none'; }
+        } else { 
+            rowDescuento.style.display = 'none'; 
+        }
 
-        totalVenta = Math.round(tempTotal * 100) / 100;
+        // 6. El Total a Pagar es el Neto de los productos + la Bolsa
+        totalVenta = Math.round((totalNetoProductos + bolsaMonto) * 100) / 100;
 
+        // 7. Actualizamos la UI
+        // El subtotal a mostrar en el ticket ahora es la Base Imponible limpia
         document.getElementById('ticket-subtotal').innerText = `S/. ${subtotalVenta.toFixed(2)}`;
         document.getElementById('ticket-total').innerText = `S/. ${totalVenta.toFixed(2)}`;
         
@@ -652,7 +662,7 @@
         const tipoPago = btn.getAttribute('data-tipo');
         const inputRecibido = document.getElementById('in-recibido');
 
-        if (tipoPago === 'Tarjeta' || tipoPago === 'Yape/Plin') {
+        if (tipoPago === 'Tarjeta' || tipoPago === 'Yape/Plin' || tipoPago === 'EcoPoints') {
             inputRecibido.value = totalVenta > 0 ? totalVenta.toFixed(2) : '';
             inputRecibido.setAttribute('readonly', true);
         } else {
@@ -664,7 +674,7 @@
     }
 
     // ==========================================
-    // LIMPIEZA Y GUARDADO DE LA VENTA EN LA NUBE
+    // LIMPIEZA Y GUARDADO DE LA VENTA EN EL SERVIDOR
     // ==========================================
     function limpiarFormulario() {
         carrito = []; descuentoPorcentaje = 0; descuentoMonto = 0; 
@@ -701,54 +711,59 @@
         const tipoPagoActivo = document.querySelector('.pay-btn.active').getAttribute('data-tipo');
         const nroBoleta = document.getElementById('bar-boleta').innerText;
 
-        const idGenerado = Date.now().toString();
-
+        // Construimos el objeto a enviar a Node.js
         const nuevaVenta = {
-            id: idGenerado,
             boleta: nroBoleta,
-            fecha: new Date().toISOString(),
-            codigo: carrito.length === 1 ? carrito[0].codigo : "VARIOS PRODUCTOS",
-            nombreProd: carrito.length === 1 ? carrito[0].nombre : "TICKET MULTIPLE",
-            cantidad: carrito.reduce((acc, el) => acc + el.cantidad, 0),
-            precioUn: carrito.length === 1 ? carrito[0].precio : 0,
-            productos: carrito, 
+            dni_cliente: document.getElementById('in-dni').value || "00000000",
+            nombre_cliente: nombreCliente,
+            id_vendedor: idVendedorActual,
+            nombre_vendedor: nombreVendedorActual,
             subtotal: subtotalVenta,
+            descuento: descuentoMonto, 
             igv: igvMonto,
             bolsa: bolsaMonto,
-            desc: descuentoMonto, 
             total: totalVenta,
-            dniCliente: document.getElementById('in-dni').value || "00000000",
-            nombreCliente: nombreCliente,
-            idVendedor: idVendedorActual,
-            nombreVendedor: nombreVendedorActual,
+            tipo_pago: tipoPagoActivo,
             recibido: montoRecibido,
             cambio: parseFloat(document.getElementById('ticket-cambio').innerText.replace('S/. ', '')) || 0,
-            tipoPago: tipoPagoActivo,
-            anulado: false
+            productos: carrito.map(item => ({
+                codigo: item.codigo,
+                nombre: item.nombre,
+                cantidad: item.cantidad,
+                precio: item.precio,
+                subtotal: item.subtotal
+            }))
         };
 
         btnCobrar.disabled = true;
         btnCobrar.innerHTML = `<span class="material-icons-outlined" style="font-size: 18px;">cloud_upload</span> PROCESANDO...`;
 
         try {
-            const batch = db.batch();
-
-            const ventaRef = db.collection('ventas').doc(idGenerado);
-            batch.set(ventaRef, nuevaVenta);
-
-            carrito.forEach(item => {
-                const prodRef = db.collection('productos').doc(item.codigo);
-                batch.update(prodRef, {
-                    cant: firebase.firestore.FieldValue.increment(-item.cantidad)
-                });
+            const respuesta = await fetch(`${API_BASE_URL}/ventas`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(nuevaVenta)
             });
 
-            await batch.commit();
+            if (!respuesta.ok) {
+                const data = await respuesta.json();
+                throw new Error(data.error || "Error al procesar el pago");
+            }
 
-            mostrarToast("Venta procesada con éxito en la Nube");
+            const dataGuardada = await respuesta.json();
+
+            mostrarToast("Venta procesada con éxito");
             
+            // Reconstruimos el objeto para que el ticket.js actual lo entienda
             if(typeof imprimirTicketGlobal === 'function') {
-                imprimirTicketGlobal(nuevaVenta);
+                const ventaParaTicket = {
+                    ...nuevaVenta,
+                    fecha: dataGuardada.fecha_registro || new Date().toISOString(),
+                    desc: nuevaVenta.descuento,
+                    precioUn: nuevaVenta.productos.length === 1 ? nuevaVenta.productos[0].precio : 0,
+                    nombreProd: nuevaVenta.productos.length === 1 ? nuevaVenta.productos[0].nombre : "TICKET MULTIPLE"
+                };
+                imprimirTicketGlobal(ventaParaTicket);
             } else {
                 console.error("No se encontró script ticket.js");
             }
@@ -763,7 +778,7 @@
 
         } catch (error) {
             console.error("Error al procesar la venta:", error);
-            mostrarAlerta("Error de Conexión", "No se pudo registrar la venta en la base de datos.", "error");
+            mostrarAlerta("Error Crítico", error.message || "No se pudo registrar la venta en la base de datos local.", "error");
             btnCobrar.disabled = false;
             btnCobrar.innerHTML = `<span class="material-icons-outlined" style="font-size: 18px;">point_of_sale</span> COBRAR`;
         }
