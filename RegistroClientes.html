@@ -6,8 +6,8 @@
     <title>MME - Registrar Cliente</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- LIBRERÍAS DE FIREBASE ELIMINADAS. AHORA USAMOS TU RED LOCAL -->
+    <script src="api.js"></script>
     <script src="seguridad.js"></script>
     
     <style>
@@ -155,7 +155,7 @@
 
     <div id="toast" class="polaris-toast">
         <span class="material-icons-outlined" style="font-size: 18px; color: #4ade80;">check_circle</span>
-        <span id="toast-msg">Cliente guardado exitosamente en la nube</span>
+        <span id="toast-msg">Cliente guardado exitosamente en el servidor</span>
     </div>
 
     <div id="modal-alerta" class="modal-overlay">
@@ -172,18 +172,6 @@
     </div>
 
 <script>
-    // 1. INICIALIZAR FIREBASE CON TUS LLAVES MAESTRAS
-    const firebaseConfig = {
-        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
-        authDomain: "pos-mef-ventas.firebaseapp.com",
-        projectId: "pos-mef-ventas",
-        storageBucket: "pos-mef-ventas.firebasestorage.app",
-        messagingSenderId: "704671042289",
-        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
     // ==========================================
     // SISTEMA VISUAL DE ALERTAS
     // ==========================================
@@ -226,7 +214,7 @@
     };
 
     // ==========================================
-    // GUARDAR CLIENTE EN FIREBASE (LA NUBE)
+    // GUARDAR CLIENTE EN SERVIDOR LOCAL
     // ==========================================
     async function guardarCliente() {
         const dni = document.getElementById('in-dni').value.trim();
@@ -248,46 +236,45 @@
         btnGuardar.disabled = true;
         btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 18px;">cloud_upload</span> SUBIENDO...`;
 
-        try {
-            // Verificar si el cliente ya existe en la Nube
-            const docSnap = await db.collection('clientes').doc(dni).get();
+        const nuevoCliente = {
+            dni: dni,
+            nombreCompleto: nombre,
+            celular: celular,
+            email: email,
+            direccion: dir
+        };
 
-            if (docSnap.exists) {
+        try {
+            // Mandamos los datos a tu servidor Core i5
+            const respuesta = await fetch(`${API_BASE_URL}/clientes`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(nuevoCliente)
+            });
+
+            const data = await respuesta.json();
+
+            if (!respuesta.ok) {
                 btnGuardar.disabled = false;
                 btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 18px;">save</span> GUARDAR CLIENTE`;
                 document.getElementById('in-dni').focus();
-                return mostrarAlerta("Cliente Duplicado", `Ya existe un cliente registrado con el DNI/RUC: ${dni}`, "warning");
+                return mostrarAlerta("Cliente Duplicado", data.error || `Ya existe un cliente registrado con el DNI/RUC: ${dni}`, "warning");
             }
-
-            // Crear el objeto del nuevo cliente
-            const nuevoCliente = {
-                dni: dni,
-                nombreCompleto: nombre,
-                celular: celular,
-                email: email,
-                direccion: dir,
-                fechaRegistro: new Date().toISOString(),
-                anulado: false
-            };
-            
-            // Subir a la colección 'clientes', usando el DNI como ID del documento
-            await db.collection('clientes').doc(dni).set(nuevoCliente);
 
             // Mostrar notificación visual
             const toast = document.getElementById('toast');
             toast.style.display = 'flex';
             
             // ==========================================
-            // REDIRECCIÓN AL PUNTO DE VENTAS
+            // REDIRECCIÓN (Regresa al Punto de Ventas o Historial de Boletas)
             // ==========================================
             setTimeout(() => { 
-                // Asegúrate de que tu archivo de ventas se llame 'pos.html'. Si tiene otro nombre, cámbialo aquí.
-                window.location.href = 'BDBoletas.html';
+                window.location.href = 'RegistroSalidas.html';
             }, 1500);
 
         } catch (error) {
             console.error("Error al registrar cliente:", error);
-            mostrarAlerta("Error de Conexión", "No se pudo registrar al cliente en la Nube. Verifique su internet.", "error");
+            mostrarAlerta("Error de Conexión", "No se pudo registrar al cliente en el servidor. Verifique su red.", "error");
             btnGuardar.disabled = false;
             btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 18px;">save</span> GUARDAR CLIENTE`;
         }
