@@ -6,8 +6,7 @@
     <title>M.E.F. - Gestión de Clientes</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="api.js"></script>
     <script src="seguridad.js"></script>
     <style>
         /* ==========================================
@@ -211,18 +210,6 @@
     </div>
 
 <script>
-    // 1. INICIALIZAR FIREBASE CON TUS LLAVES MAESTRAS
-    const firebaseConfig = {
-        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
-        authDomain: "pos-mef-ventas.firebaseapp.com",
-        projectId: "pos-mef-ventas",
-        storageBucket: "pos-mef-ventas.firebasestorage.app",
-        messagingSenderId: "704671042289",
-        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
     // Variable global para memoria
     let globalClientes = [];
 
@@ -291,7 +278,7 @@
                     <div class="client-id"><span class="material-icons-outlined" style="font-size:16px;">badge</span> DNI/RUC: ${item.dni}</div>
                 </div>
                 <div class="client-body">
-                    <div class="client-name">${item.nombreCompleto}</div>
+                    <div class="client-name">${item.nombre_completo || item.nombreCompleto}</div>
                     
                     <div class="contact-grid">
                         <div class="contact-item"><span class="material-icons-outlined" style="font-size: 18px;">phone_iphone</span> ${celularDisplay}</div>
@@ -323,7 +310,7 @@
         
         const datosFiltrados = globalClientes.filter(item => {
             const matchDni = (item.dni || "").toLowerCase().includes(valDni);
-            const matchNombre = (item.nombreCompleto || "").toLowerCase().includes(valNombre);
+            const matchNombre = (item.nombre_completo || item.nombreCompleto || "").toLowerCase().includes(valNombre);
             return matchDni && matchNombre;
         });
 
@@ -331,7 +318,7 @@
     }
 
     // ==========================================
-    // CONTROL DEL FORMULARIO Y GUARDADO (NUBE)
+    // CONTROL DEL FORMULARIO Y GUARDADO (SERVIDOR)
     // ==========================================
     function cerrarFormulario() {
         document.getElementById('form-nuevo-cliente').reset();
@@ -348,8 +335,8 @@
 
         if (clienteToEdit) {
             document.getElementById('edit-dni').value = clienteToEdit.dni;
-            document.getElementById('nuevo-dni').value = clienteToEdit.dni; // Se muestra pero está disabled en HTML
-            document.getElementById('nuevo-nombre').value = clienteToEdit.nombreCompleto;
+            document.getElementById('nuevo-dni').value = clienteToEdit.dni;
+            document.getElementById('nuevo-nombre').value = clienteToEdit.nombre_completo || clienteToEdit.nombreCompleto;
             document.getElementById('nuevo-celular').value = clienteToEdit.celular || '';
             document.getElementById('nuevo-email').value = clienteToEdit.email || '';
             document.getElementById('nuevo-dir').value = clienteToEdit.direccion || '';
@@ -375,18 +362,26 @@
         btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 16px;">cloud_upload</span> Actualizando...`;
 
         try {
-            // Actualizar en Firebase usando el DNI como ID del documento
-            await db.collection('clientes').doc(dniOriginal).update({
-                nombreCompleto: nombre,
-                celular: celular,
-                email: email,
-                direccion: dir
+            // Actualizar en servidor local (usamos la ruta de actualización que vamos a crear)
+            const respuesta = await fetch(`${API_BASE_URL}/clientes/${dniOriginal}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    nombreCompleto: nombre,
+                    celular: celular,
+                    email: email,
+                    direccion: dir
+                })
             });
+
+            if (!respuesta.ok) {
+                throw new Error("No se pudo actualizar en el servidor");
+            }
 
             // Actualizar en la memoria local para no recargar la página entera
             const index = globalClientes.findIndex(c => c.dni === dniOriginal);
             if (index !== -1) {
-                globalClientes[index].nombreCompleto = nombre;
+                globalClientes[index].nombre_completo = nombre;
                 globalClientes[index].celular = celular;
                 globalClientes[index].email = email;
                 globalClientes[index].direccion = dir;
@@ -394,24 +389,29 @@
 
             cerrarFormulario();
             aplicarFiltros(); 
-            mostrarToast("Cliente actualizado en Firebase");
-            btnGuardar.disabled = false;
-            btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 16px;">save</span> Guardar`;
-
+            mostrarToast("Cliente actualizado correctamente");
+            
         } catch (error) {
             console.error("Error al actualizar cliente:", error);
-            mostrarAlerta("Error de Conexión", "No se pudo actualizar el cliente en la nube.", "error");
+            mostrarAlerta("Error de Conexión", "No se pudo actualizar el cliente en el servidor.", "error");
+        } finally {
             btnGuardar.disabled = false;
-            btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 16px;">save</span> Guardar`;
+            btnGuardar.innerHTML = `<span class="material-icons-outlined" style="font-size: 16px;">save</span> Actualizar`;
         }
     }
 
     function eliminarClienteNube(dni) {
         mostrarConfirmacion("¿Estás seguro de que deseas ELIMINAR permanentemente a este cliente de la base de datos?", async () => {
-            mostrarToast("Eliminando de la nube...");
+            mostrarToast("Eliminando del servidor...");
             try {
-                // Eliminar de Firebase
-                await db.collection('clientes').doc(dni).delete();
+                // Eliminar en servidor local
+                const respuesta = await fetch(`${API_BASE_URL}/clientes/${dni}`, {
+                    method: 'DELETE'
+                });
+
+                if (!respuesta.ok) {
+                    throw new Error("Error al eliminar del servidor");
+                }
                 
                 // Actualizar la lista en memoria
                 globalClientes = globalClientes.filter(c => c.dni !== dni);
@@ -419,7 +419,7 @@
                 mostrarToast("Cliente eliminado del directorio");
             } catch (error) {
                 console.error("Error al eliminar cliente:", error);
-                mostrarAlerta("Error Crítico", "No se pudo eliminar al cliente de la Nube.", "error");
+                mostrarAlerta("Error Crítico", "No se pudo eliminar al cliente del servidor local.", "error");
             }
         });
     }
@@ -427,7 +427,7 @@
     function llamarCliente(numero) { window.location.href = `tel:${numero}`; }
 
     // ==========================================
-    // INICIALIZACIÓN, DESCARGA Y GUARDIÁN
+    // INICIALIZACIÓN Y DESCARGA DESDE EL SERVIDOR
     // ==========================================
     window.onload = async () => {
         // --- INICIO DEL GUARDIÁN ---
@@ -447,23 +447,24 @@
         document.getElementById('txt-fecha').innerHTML = `Generado: <strong>${hoy.toLocaleDateString('es-PE', opciones)}</strong>`;
         
         try {
-            // Descargar clientes desde Firebase ordenados por fecha de registro
-            const snapshot = await db.collection('clientes').orderBy('fechaRegistro', 'desc').get();
+            // Descargar clientes desde Servidor Local
+            const respuesta = await fetch(`${API_BASE_URL}/clientes`);
+            if (!respuesta.ok) throw new Error("No se pudo conectar al servidor local");
+
+            globalClientes = await respuesta.json();
             
-            globalClientes = [];
-            snapshot.forEach(doc => {
-                globalClientes.push(doc.data());
-            });
+            // Ordenar por fecha de registro descendente (los más nuevos arriba)
+            globalClientes.sort((a, b) => new Date(b.fecha_registro) - new Date(a.fecha_registro));
 
             aplicarFiltros(); 
         } catch (error) {
-            console.error("Error descargando clientes de Firebase:", error);
+            console.error("Error descargando clientes del servidor:", error);
             document.getElementById('clientes-container').innerHTML = `
                 <div class="empty-state" style="border-color: #fca5a5; color: #b91c1c;">
                     <span class="material-icons-outlined" style="font-size: 32px; margin-bottom: 10px;">cloud_off</span>
-                    <p>Error de conexión al cargar el directorio desde la Nube.</p>
+                    <p>Error de conexión al cargar el directorio desde el servidor local.</p>
                 </div>`;
-            mostrarAlerta("Error de Conexión", "No se pudieron cargar los clientes desde Firebase.", "error");
+            mostrarAlerta("Error de Conexión", "Asegúrese de que el servidor Core i5 esté encendido.", "error");
         }
     };
 </script>
