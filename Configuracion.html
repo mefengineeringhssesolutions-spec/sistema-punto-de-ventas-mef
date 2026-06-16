@@ -6,8 +6,7 @@
     <title>MME - Configuración del Sistema</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="api.js"></script>
     <script src="seguridad.js"></script>
     
     <style>
@@ -122,7 +121,7 @@
             </div>
         </header>
         <div class="system-info">
-            <span> MME ENGINEERING & SOLUCIONES | v2.0 (Cloud)</span>
+            <span> MME ENGINEERING & SOLUCIONES | v3.0 (Local Server)</span>
         </div>
     </div>
 
@@ -249,16 +248,16 @@
                 <div class="form-section" style="background: #fafbfb; border: 1px dashed var(--p-border);">
                     <div class="section-title" style="color: var(--p-interactive); border-bottom:none;"><span class="material-icons-outlined">cloud_sync</span> Respaldo de Base de Datos</div>
                     <p style="font-size: 13px; color: var(--p-text-subdued); margin-bottom: 16px;">
-                        Descarga una copia de seguridad o restaura tu sistema al instante.
+                        Descarga una copia de seguridad o restaura tu sistema al instante. (PostgreSQL Local)
                     </p>
 
                     <div class="form-grid">
-                        <button type="button" class="btn-backup export" onclick="exportarBackup()">
-                            <span class="material-icons-outlined">cloud_download</span> Exportar Nube a PC/Móvil
+                        <button type="button" class="btn-backup export" onclick="exportarBackupLocal()">
+                            <span class="material-icons-outlined">cloud_download</span> Exportar BD a PC/Móvil
                         </button>
                         
                         <div>
-                            <input type="file" id="file-import" style="display: none;" accept=".json" onchange="procesarArchivoImportacion(event)">
+                            <input type="file" id="file-import" style="display: none;" accept=".json" onchange="procesarArchivoImportacionLocal(event)">
                             <button type="button" class="btn-backup import" onclick="document.getElementById('file-import').click()">
                                 <span class="material-icons-outlined">cloud_upload</span> Restaurar Sistema
                             </button>
@@ -282,6 +281,7 @@
         </button>
     </div>
 
+    <!-- Modal Alerta Estándar -->
     <div id="modal-alerta" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header" id="alerta-header">
@@ -295,6 +295,24 @@
         </div>
     </div>
 
+    <!-- Modal Elegante para Confirmar Eliminación de Catálogo -->
+    <div id="modal-confirm-catalogo" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header warning">
+                <span class="material-icons-outlined">delete_outline</span>
+                <span>Eliminar Catálogo</span>
+            </div>
+            <div class="modal-body" id="confirm-cat-mensaje" style="font-weight: 500;">
+                ¿Estás seguro de que deseas eliminar esta opción?
+            </div>
+            <div class="modal-footer" style="display:flex; justify-content:space-between;">
+                <button class="polaris-btn-primary" style="background:#f4f6f8; color:var(--p-text); border:1px solid var(--p-border); width: 48%; border-radius: 6px; padding: 10px;" onclick="cerrarConfirmacionCatalogo()">Cancelar</button>
+                <button class="polaris-btn-primary" style="background:var(--p-critical); width: 48%; border-radius: 6px; padding: 10px;" id="btn-confirm-cat">Sí, Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Peligro Extremo (Borrado Total) -->
     <div id="modal-danger" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header error">
@@ -302,11 +320,11 @@
                 <span>Borrado del Sistema</span>
             </div>
             <div class="modal-body">
-                ¿Está completamente seguro? Esta acción eliminará <strong>absolutamente todas las ventas (incluso las anuladas) y todo el inventario</strong> de Firebase para iniciar de cero.<br><br>Los usuarios y la configuración no serán afectados.
+                ¿Está completamente seguro? Esta acción eliminará <strong>absolutamente todas las ventas (incluso las anuladas) y todo el inventario</strong> de su Servidor Local para iniciar de cero.<br><br>Los usuarios y la configuración no serán afectados.
             </div>
             <div class="modal-footer" style="display:flex; justify-content:space-between;">
                 <button class="polaris-btn-primary" style="background:#f4f6f8; color:var(--p-text); border:1px solid var(--p-border); width: 48%; border-radius: 6px; padding: 10px;" onclick="cerrarModalLimpieza()">Cancelar</button>
-                <button class="polaris-btn-primary" style="background:var(--p-critical); width: 48%; border-radius: 6px; padding: 10px;" onclick="ejecutarLimpieza()">Sí, Borrar Todo</button>
+                <button class="polaris-btn-primary" style="background:var(--p-critical); width: 48%; border-radius: 6px; padding: 10px;" onclick="ejecutarLimpiezaLocal()">Sí, Borrar Todo</button>
             </div>
         </div>
     </div>
@@ -317,22 +335,6 @@
     </div>
 
 <script>
-    // 1. INICIALIZAR FIREBASE
-    const firebaseConfig = {
-        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
-        authDomain: "pos-mef-ventas.firebaseapp.com",
-        projectId: "pos-mef-ventas",
-        storageBucket: "pos-mef-ventas.firebasestorage.app",
-        messagingSenderId: "704671042289",
-        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    const configRef = db.collection('sistema').doc('configuracion'); 
-
-    // ==========================================
-    // GUARDIÁN DE SEGURIDAD (RBAC) E INICIALIZACIÓN
-    // ==========================================
     window.onload = async () => {
         const sesionStr = localStorage.getItem('isa_sesion');
         if (!sesionStr) { window.location.href = 'login.html'; return; }
@@ -344,9 +346,13 @@
         }
 
         try {
-            const doc = await configRef.get();
-            if (doc.exists) {
-                const data = doc.data();
+            const respuesta = await fetch(`${API_BASE_URL}/configuracion`);
+            if (!respuesta.ok) throw new Error("No se pudo conectar a la base de datos");
+
+            const dataArr = await respuesta.json();
+            
+            if (dataArr.length > 0) {
+                const data = dataArr[0];
                 cargarConfiguracionVisual(data);
                 listasCatalogos.almacenes = data.almacenes || [];
                 listasCatalogos.categorias = data.categorias || [];
@@ -355,8 +361,8 @@
                 verificarSistemaNuevo();
             }
         } catch (error) {
-            console.error("Error leyendo Firebase", error);
-            mostrarAlerta("Error de Conexión", "No se pudo descargar la configuración de la nube.", "error");
+            console.error("Error leyendo Base de Datos Local", error);
+            mostrarAlerta("Error de Conexión", "No se pudo descargar la configuración del servidor Core i5.", "error");
         }
         
         renderizarCatalogos();
@@ -365,7 +371,7 @@
     function verificarSistemaNuevo() {
         mostrarAlerta(
             "Nuevo Sistema Detectado", 
-            "Bienvenido a MME Pro.\n\nEl sistema se encuentra en blanco. Para empezar a registrar productos, por favor ingrese los datos, agregue sus catálogos y presione 'Guardar'.", 
+            "Bienvenido a MME Pro.\n\nEl servidor local se encuentra en blanco. Para empezar, por favor ingrese los datos, agregue sus catálogos y presione 'Guardar'.", 
             "info"
         );
     }
@@ -393,6 +399,24 @@
         toast.style.display = 'flex';
         setTimeout(() => toast.style.display = 'none', 2500);
     }
+
+    // ==========================================
+    // LÓGICA DE CONFIRMACIÓN ELEGANTE (CATÁLOGOS)
+    // ==========================================
+    let catConfirmCallback = null;
+    function mostrarConfirmacionCatalogo(mensaje, callback) {
+        document.getElementById('confirm-cat-mensaje').innerText = mensaje;
+        catConfirmCallback = callback;
+        document.getElementById('modal-confirm-catalogo').style.display = 'flex';
+    }
+    function cerrarConfirmacionCatalogo() {
+        document.getElementById('modal-confirm-catalogo').style.display = 'none';
+        catConfirmCallback = null;
+    }
+    document.getElementById('btn-confirm-cat').addEventListener('click', () => {
+        if (catConfirmCallback) catConfirmCallback();
+        cerrarConfirmacionCatalogo();
+    });
 
     const listasCatalogos = { almacenes: [], categorias: [], unidades: [] };
 
@@ -426,18 +450,17 @@
             
             listasCatalogos[tipo].unshift(nuevoValor);
             input.value = '';
+            renderizarCatalogos();
             mostrarToast("Añadido a la lista (No olvide Guardar Todo)");
 
         } else if (accion === 'delete') {
-            if(!confirm("¿Desea eliminar esta opción del catálogo?")) return;
-            listasCatalogos[tipo].splice(index, 1);
-            mostrarToast("Eliminado de la lista");
+            const itemNombre = listasCatalogos[tipo][index];
+            mostrarConfirmacionCatalogo(`¿Desea eliminar la opción "${itemNombre}" de la lista de ${tipo}?`, () => {
+                listasCatalogos[tipo].splice(index, 1);
+                renderizarCatalogos();
+                mostrarToast("Eliminado de la lista (No olvide Guardar Todo)");
+            });
         }
-        renderizarCatalogos();
-        
-        try {
-            await configRef.set({ [tipo]: listasCatalogos[tipo] }, { merge: true });
-        } catch(e) { console.error("Fallo al guardar catálogo en la nube", e); }
     };
 
     function cargarConfiguracionVisual(cfg) {
@@ -449,12 +472,9 @@
         document.getElementById('cfg-igv').value = cfg.igv !== undefined ? cfg.igv : "";
         document.getElementById('cfg-bolsa').value = cfg.bolsa !== undefined ? cfg.bolsa : "";
         document.getElementById('cfg-descmax').value = cfg.descmax !== undefined ? cfg.descmax : "";
-        document.getElementById('cfg-margen').value = cfg.margenSugerido !== undefined ? cfg.margenSugerido : "";
+        document.getElementById('cfg-margen').value = cfg.margen_sugerido !== undefined ? cfg.margen_sugerido : "";
         
         localStorage.setItem('isa_config', JSON.stringify(cfg));
-        localStorage.setItem('isa_cat_almacenes', JSON.stringify(cfg.almacenes || []));
-        localStorage.setItem('isa_cat_categorias', JSON.stringify(cfg.categorias || []));
-        localStorage.setItem('isa_cat_unidades', JSON.stringify(cfg.unidades || []));
     }
 
     async function guardarConfiguracion() {
@@ -467,7 +487,7 @@
             igv: parseFloat(document.getElementById('cfg-igv').value) || 0,
             bolsa: parseFloat(document.getElementById('cfg-bolsa').value) || 0,
             descmax: parseFloat(document.getElementById('cfg-descmax').value) || 0,
-            margenSugerido: parseFloat(document.getElementById('cfg-margen').value) || 0,
+            margen_sugerido: parseFloat(document.getElementById('cfg-margen').value) || 0,
             almacenes: listasCatalogos.almacenes,
             categorias: listasCatalogos.categorias,
             unidades: listasCatalogos.unidades
@@ -478,65 +498,53 @@
         }
 
         btn.disabled = true;
-        btn.innerHTML = `<span class="material-icons-outlined">cloud_upload</span> SUBIENDO A LA NUBE...`;
+        btn.innerHTML = `<span class="material-icons-outlined">cloud_upload</span> SUBIENDO AL SERVIDOR...`;
 
         try {
-            await configRef.set(nuevaConfig);
+            const respuesta = await fetch(`${API_BASE_URL}/configuracion`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(nuevaConfig)
+            });
+
+            if(!respuesta.ok) throw new Error("Fallo en la actualización");
+
             cargarConfiguracionVisual(nuevaConfig); 
             
             btn.disabled = false;
             btn.innerHTML = `<span class="material-icons-outlined">save</span> GUARDAR TODA LA CONFIGURACIÓN`;
-            mostrarAlerta("Éxito", "Toda la configuración ha sido guardada y sincronizada en Firebase.", "success");
+            mostrarAlerta("Éxito", "Toda la configuración ha sido guardada en la Base de Datos Local.", "success");
         } catch (error) {
             btn.disabled = false;
             btn.innerHTML = `<span class="material-icons-outlined">save</span> GUARDAR TODA LA CONFIGURACIÓN`;
-            mostrarAlerta("Error", "No se pudo subir la configuración a la nube. Revisa tu internet.", "error");
+            mostrarAlerta("Error", "No se pudo subir la configuración al servidor Core i5.", "error");
         }
     }
 
     // ==========================================
-    // SISTEMA DE BACKUP BLINDADO Y DETECTOR DE APP
+    // SISTEMA DE BACKUP BLINDADO
     // ==========================================
-    async function exportarBackup() {
-        mostrarToast("Compilando toda la base de datos...");
+    async function exportarBackupLocal() {
+        mostrarToast("Compilando toda la base de datos local...");
         try {
-            const backup = { fechaRespaldo: new Date().toISOString() };
+            const respuesta = await fetch(`${API_BASE_URL}/sistema/backup`);
+            if(!respuesta.ok) throw new Error("Fallo al descargar backup");
 
-            const docConf = await configRef.get();
-            backup.configuracion = docConf.exists ? docConf.data() : {};
+            const backup = await respuesta.json();
 
-            backup.productos = [];
-            const prodSnap = await db.collection('productos').get();
-            prodSnap.forEach(doc => backup.productos.push(doc.data()));
-
-            backup.ventas = [];
-            const ventasSnap = await db.collection('ventas').get();
-            ventasSnap.forEach(doc => backup.ventas.push(doc.data()));
-
-            backup.clientes = [];
-            const clientesSnap = await db.collection('clientes').get();
-            clientesSnap.forEach(doc => backup.clientes.push(doc.data()));
-
-            backup.usuarios = [];
-            const usuSnap = await db.collection('usuarios').get();
-            usuSnap.forEach(doc => backup.usuarios.push(doc.data()));
-
-            // 1. DETECTOR DE APLICACIÓN MÓVIL (WEBVIEW)
-            // Esto evita que la aplicación de Flutter colapse al intentar descargar
             const userAgent = navigator.userAgent.toLowerCase();
             const esAppNativa = userAgent.includes('wv') || (userAgent.includes('android') && userAgent.includes('version/'));
 
             if (esAppNativa) {
                 return mostrarAlerta(
                     "Acción de Administrador", 
-                    "Por seguridad de Android, la aplicación móvil bloquea las descargas de archivos de respaldo.\n\nPara descargar su Base de Datos, por favor abra su enlace web directamente en Google Chrome o desde una Computadora.", 
+                    "Por seguridad de Android, la aplicación móvil bloquea las descargas directas.\n\nPara descargar su Base de Datos, por favor abra la dirección IP de su servidor en el navegador Google Chrome.", 
                     "info"
                 );
             }
 
-            // 2. SI ES PC O NAVEGADOR NORMAL -> DESCARGAMOS EL ARCHIVO
             const dataStr = JSON.stringify(backup, null, 2);
-            const fileName = `MME_Backup_${new Date().toISOString().split('T')[0]}.json`;
+            const fileName = `MME_Backup_PostgreSQL_${new Date().toISOString().split('T')[0]}.json`;
             const blob = new Blob([dataStr], { type: 'application/json' });
             
             const url = window.URL.createObjectURL(blob);
@@ -552,14 +560,11 @@
 
         } catch(e) {
             console.error("Error en backup:", e);
-            mostrarAlerta("Error Crítico", "No se pudo compilar la base de datos de Firebase. Verifique su red.", "error");
+            mostrarAlerta("Error Crítico", "No se pudo extraer la base de datos del servidor Core i5.", "error");
         }
     }
 
-    // ==========================================
-    // IMPORTACIÓN POR LOTES RESTAURADA
-    // ==========================================
-    function procesarArchivoImportacion(event) {
+    function procesarArchivoImportacionLocal(event) {
         const file = event.target.files[0];
         if (!file) return;
 
@@ -567,119 +572,48 @@
         reader.onload = async function(e) {
             try {
                 const data = JSON.parse(e.target.result);
-                mostrarToast("Empaquetando datos para envío seguro...");
-                
-                const batch = db.batch();
-                let cantidadOperaciones = 0;
+                mostrarToast("Inyectando datos al servidor local...");
 
-                let configFinal = data.configuracion || data.config || {};
-                if (data.catalogos) {
-                    configFinal.almacenes = data.catalogos.almacenes || [];
-                    configFinal.categorias = data.catalogos.categorias || [];
-                    configFinal.unidades = data.catalogos.unidades || [];
+                const respuesta = await fetch(`${API_BASE_URL}/sistema/restaurar`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if(!respuesta.ok) {
+                    const errMsg = await respuesta.json();
+                    throw new Error(errMsg.error || "Fallo en la restauración de la base de datos");
                 }
                 
-                if (Object.keys(configFinal).length > 0) {
-                    batch.set(configRef, configFinal, { merge: true });
-                    cantidadOperaciones++;
-                }
-
-                const listaProductos = data.productos || data.ingresos || [];
-                if (Array.isArray(listaProductos)) {
-                    listaProductos.forEach(p => {
-                        const idDoc = p.codigo || p.cod || p.id;
-                        if (idDoc) {
-                            batch.set(db.collection('productos').doc(idDoc), p);
-                            cantidadOperaciones++;
-                        }
-                    });
-                }
-
-                if (data.ventas && Array.isArray(data.ventas)) {
-                    data.ventas.forEach(v => {
-                        if (v.id) {
-                            batch.set(db.collection('ventas').doc(v.id), v);
-                            cantidadOperaciones++;
-                        }
-                    });
-                }
-
-                if (data.clientes && Array.isArray(data.clientes)) {
-                    data.clientes.forEach(c => {
-                        const idCliente = c.dni || c.id;
-                        if (idCliente) {
-                            batch.set(db.collection('clientes').doc(idCliente), c);
-                            cantidadOperaciones++;
-                        }
-                    });
-                }
-
-                if (data.usuarios && Array.isArray(data.usuarios)) {
-                    data.usuarios.forEach(u => {
-                        const idUser = u.dni || u.id;
-                        if (idUser) {
-                            batch.set(db.collection('usuarios').doc(idUser), u);
-                            cantidadOperaciones++;
-                        }
-                    });
-                }
-
-                if(cantidadOperaciones === 0) {
-                   return mostrarAlerta("Archivo Vacío", "No se encontraron datos válidos.", "warning");
-                }
-
-                mostrarToast(`Subiendo paquete masivo de ${cantidadOperaciones} registros...`);
-
-                await batch.commit();
-                
-                mostrarAlerta("Restauración Exitosa", `Se han inyectado los ${cantidadOperaciones} registros en la Nube correctamente y sin pérdidas.`, "success");
-                
+                mostrarAlerta("Restauración Exitosa", `La Base de Datos ha sido inyectada correctamente en el Servidor.`, "success");
                 setTimeout(() => location.reload(), 3000);
 
             } catch (error) {
                 console.error(error);
-                mostrarAlerta("Error", "El archivo es válido, pero falló la conexión al inyectar el lote.", "error");
+                mostrarAlerta("Error", error.message || "El archivo es válido, pero falló la conexión con la Core i5.", "error");
             }
         };
         reader.readAsText(file);
     }
 
     // ==========================================
-    // LIMPIEZA ABSOLUTA DEL SISTEMA POR LOTES
+    // LIMPIEZA ABSOLUTA DEL SISTEMA
     // ==========================================
     function abrirModalLimpieza() { document.getElementById('modal-danger').style.display = 'flex'; }
     function cerrarModalLimpieza() { document.getElementById('modal-danger').style.display = 'none'; }
     
-    async function ejecutarLimpieza() {
+    async function ejecutarLimpiezaLocal() {
         cerrarModalLimpieza();
-        mostrarToast("Arrasando registros en la Nube de forma segura...");
+        mostrarToast("Arrasando registros en PostgreSQL...");
         
         try {
-            const batch = db.batch();
-            let cantidadBorrados = 0;
+            const respuesta = await fetch(`${API_BASE_URL}/sistema/limpiar`, { method: 'DELETE' });
+            if(!respuesta.ok) throw new Error("Fallo al ejecutar limpieza en servidor");
 
-            const productosSnap = await db.collection('productos').get();
-            productosSnap.forEach(doc => {
-                batch.delete(doc.ref);
-                cantidadBorrados++;
-            });
-
-            const ventasSnap = await db.collection('ventas').get();
-            ventasSnap.forEach(doc => {
-                batch.delete(doc.ref);
-                cantidadBorrados++;
-            });
-
-            if (cantidadBorrados > 0) {
-                await batch.commit();
-            }
-            
-            localStorage.removeItem('isa_ingresos_db'); 
-
-            mostrarAlerta("Sistema en Cero", "Todo el inventario y el historial completo de ventas han sido eliminados de la nube permanentemente.", "success");
+            mostrarAlerta("Sistema en Cero", "Todo el inventario y el historial completo de ventas han sido eliminados de la Base de Datos Local permanentemente.", "success");
         } catch (error) {
             console.error("Error al borrar el sistema:", error);
-            mostrarAlerta("Error Crítico", "Hubo un problema al intentar borrar los datos de la nube. Verifique su conexión.", "error");
+            mostrarAlerta("Error Crítico", "Hubo un problema de conexión con el Servidor al intentar borrar los datos.", "error");
         }
     }
 </script>
