@@ -6,8 +6,8 @@
     <title>M.E.F. - Historial de Ventas</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <!-- LIBRERÍAS DE FIREBASE ELIMINADAS. AHORA USAMOS TU PROPIA RED -->
+    <script src="api.js"></script>
     <script src="seguridad.js"></script>
     <style>
         /* ==========================================
@@ -216,18 +216,6 @@
 <script src="ticket.js"></script>
 
 <script>
-    // 1. INICIALIZAR FIREBASE
-    const firebaseConfig = {
-        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
-        authDomain: "pos-mef-ventas.firebaseapp.com",
-        projectId: "pos-mef-ventas",
-        storageBucket: "pos-mef-ventas.firebasestorage.app",
-        messagingSenderId: "704671042289",
-        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
     // Variable global para almacenar las ventas descargadas
     let globalVentas = [];
 
@@ -313,25 +301,26 @@
             const card = document.createElement('div');
             card.className = `sale-card ${item.anulado ? 'anulada' : ''}`;
             
-            let tipoPago = item.tipoPago || 'Efectivo';
+            let tipoPago = item.tipo_pago || item.tipoPago || 'Efectivo';
             let claseBadge = (tipoPago === 'Efectivo') ? 'badge-efectivo' : 'badge-digital';
             if(item.anulado) { tipoPago = "ANULADA"; claseBadge = "badge-anulado"; }
 
             let nomVendedor = "No Registrado";
-            if (item.nombreVendedor) { nomVendedor = item.nombreVendedor.split(' ')[0]; } 
-            else if (item.idVendedor) { nomVendedor = item.idVendedor; }
+            if (item.nombre_vendedor || item.nombreVendedor) { nomVendedor = (item.nombre_vendedor || item.nombreVendedor).split(' ')[0]; } 
+            else if (item.id_vendedor || item.idVendedor) { nomVendedor = item.id_vendedor || item.idVendedor; }
 
             let resumenProductos = "";
             if(item.productos && Array.isArray(item.productos) && item.productos.length > 0) {
-                const nombres = item.productos.map(p => `• ${p.cantidad}x ${p.nombre || 'Desconocido'}`).join('<br>');
+                const nombres = item.productos.map(p => `• ${p.cantidad}x ${p.nombre_producto || p.nombre || 'Desconocido'}`).join('<br>');
                 resumenProductos = `<div class="product-list">${nombres}</div>`;
             } else {
-                resumenProductos = `<div class="product-list">• ${item.cantidad || 0}x ${item.nombreProd || 'Producto Desconocido'}</div>`;
+                resumenProductos = `<div class="product-list">• Ver detalles en ticket</div>`;
             }
 
             let descuentoHtml = "";
-            if(item.desc && parseFloat(item.desc) > 0) {
-                descuentoHtml = `<div class="fin-detail" style="color: var(--danger);"><span>Descuento:</span> <span>-${formatoSoles.format(item.desc)}</span></div>`;
+            let descuentoValor = item.descuento || item.desc || 0;
+            if(parseFloat(descuentoValor) > 0) {
+                descuentoHtml = `<div class="fin-detail" style="color: var(--danger);"><span>Descuento:</span> <span>-${formatoSoles.format(descuentoValor)}</span></div>`;
             }
 
             // Validar boleta para interfaz
@@ -354,8 +343,8 @@
                     <div class="info-row">
                         <div class="info-icon"><span class="material-icons-outlined" style="font-size: 16px;">person</span></div>
                         <div class="info-data">
-                            <strong>${item.nombreCliente || 'Cliente General'}</strong>
-                            <small>DNI: ${item.dniCliente || 'S/D'} &nbsp;•&nbsp; ${fechaMostrada}</small>
+                            <strong>${item.nombre_cliente || item.nombreCliente || 'Cliente General'}</strong>
+                            <small>DNI: ${item.dni_cliente || item.dniCliente || 'S/D'} &nbsp;•&nbsp; ${fechaMostrada}</small>
                         </div>
                     </div>
                     
@@ -377,11 +366,11 @@
                 </div>
 
                 <div class="card-actions">
-                    <button class="btn-action" style="color: var(--p-interactive);" onclick="llamarImpresion('${item.id}')">
+                    <button class="btn-action" style="color: var(--p-interactive);" onclick="llamarImpresion('${item.id_venta || item.id}')">
                         <span class="material-icons-outlined" style="font-size: 14px;">print</span> Ticket
                     </button>
                     
-                    <button class="btn-action delete" onclick="anularVentaNube('${item.id}', '${boletaSegura}')" ${item.anulado ? 'disabled' : ''}>
+                    <button class="btn-action delete" onclick="anularVentaNube('${item.id_venta || item.id}', '${boletaSegura}')" ${item.anulado ? 'disabled' : ''}>
                         <span class="material-icons-outlined" style="font-size: 14px;">${item.anulado ? 'block' : 'cancel'}</span> Anular
                     </button>
                 </div>
@@ -408,7 +397,6 @@
         }
 
         let datosFiltrados = globalVentas.filter(item => {
-            // Detectar cómo se guardó la fecha (ISO o LocalString)
             let fechaItem = item.fecha || "";
             if (fechaItem.includes('T')) {
                 fechaItem = new Date(fechaItem).toLocaleDateString('es-PE');
@@ -417,7 +405,7 @@
             const matchFecha = valFecha === "" || fechaItem === valFecha;
             const matchBoleta = (item.boleta || "").toString().toLowerCase().includes(valBoleta);
             
-            const strCliente = ((item.dniCliente || "") + " " + (item.nombreCliente || "")).toLowerCase();
+            const strCliente = ((item.dni_cliente || item.dniCliente || "") + " " + (item.nombre_cliente || item.nombreCliente || "")).toLowerCase();
             const matchCliente = valCliente === "" || strCliente.includes(valCliente);
             
             return matchFecha && matchBoleta && matchCliente;
@@ -434,47 +422,35 @@
     }
 
     // ==========================================
-    // ANULAR VENTA EN LA NUBE Y DEVOLVER STOCK
+    // ANULAR VENTA EN EL SERVIDOR (POSTGRESQL)
     // ==========================================
     function anularVentaNube(idVenta, boletaTexto) {
         mostrarConfirmacion(
-            `⚠️ ATENCIÓN: ¿Está seguro que desea ANULAR la boleta N° BOL-${boletaTexto}?\n\nEl registro dejará de sumar a los ingresos y el stock volverá automáticamente al inventario en la nube.`,
+            `⚠️ ATENCIÓN: ¿Está seguro que desea ANULAR la boleta N° BOL-${boletaTexto}?\n\nEl registro dejará de sumar a los ingresos y el stock volverá automáticamente al inventario del servidor.`,
             async () => {
-                mostrarToast("Procesando anulación en la nube...");
+                mostrarToast("Procesando anulación en el servidor...");
                 
                 try {
-                    const venta = globalVentas.find(v => v.id === idVenta);
-                    if(!venta) throw new Error("Venta no encontrada en memoria.");
+                    // Llamamos a tu nuevo servidor Core i5
+                    const response = await fetch(`${API_BASE_URL}/ventas/${idVenta}/anular`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
 
-                    const batch = db.batch();
-
-                    // 1. Marcar la venta como anulada
-                    const ventaRef = db.collection('ventas').doc(idVenta);
-                    batch.update(ventaRef, { anulado: true });
-
-                    // 2. Devolver el stock de cada producto al inventario
-                    if (venta.productos && Array.isArray(venta.productos)) {
-                        venta.productos.forEach(prod => {
-                            const prodRef = db.collection('productos').doc(prod.codigo);
-                            // La función increment devuelve la cantidad exacta que se había restado
-                            batch.update(prodRef, {
-                                cant: firebase.firestore.FieldValue.increment(prod.cantidad)
-                            });
-                        });
+                    if (!response.ok) {
+                        throw new Error("El servidor no pudo procesar la anulación");
                     }
 
-                    // Ejecutar lote de actualizaciones
-                    await batch.commit();
-
                     // Actualizar memoria local para no recargar la página entera
-                    venta.anulado = true;
-                    aplicarFiltros(); 
+                    const venta = globalVentas.find(v => (v.id_venta || v.id) === idVenta);
+                    if(venta) venta.anulado = true;
                     
-                    mostrarToast(`Boleta BOL-${boletaTexto} ha sido anulada exitosamente.`, true);
+                    aplicarFiltros(); 
+                    mostrarToast(`Boleta BOL-${boletaTexto} ha sido anulada exitosamente.`, false);
 
                 } catch (error) {
                     console.error("Error al anular venta:", error);
-                    mostrarAlerta("Error Crítico", "Hubo un error al anular la boleta en la nube y devolver el stock.", "error");
+                    mostrarAlerta("Error Crítico", "Hubo un error al comunicarse con el servidor para anular la boleta.", "error");
                 }
             }
         );
@@ -484,7 +460,7 @@
     // IMPRESIÓN CENTRALIZADA A TICKET.JS
     // ==========================================
     function llamarImpresion(id) {
-        const venta = globalVentas.find(v => v.id === id);
+        const venta = globalVentas.find(v => (v.id_venta || v.id) === id);
         
         if(!venta) return mostrarAlerta("Error de Lectura", "No se pudo recuperar la información de este ticket en la memoria.", "error");
 
@@ -496,7 +472,7 @@
     }
 
     // ==========================================
-    // INICIALIZACIÓN, DESCARGA Y GUARDIÁN
+    // INICIALIZACIÓN Y DESCARGA DESDE CORE I5
     // ==========================================
     window.onload = async () => {
         // --- INICIO DEL GUARDIÁN ---
@@ -518,23 +494,25 @@
         document.getElementById('txt-fecha').innerHTML = `Generado: <strong>${hoy.toLocaleDateString('es-PE')}</strong>`;
         
         try {
-            // Descargar todas las ventas de la nube, ordenadas de la más nueva a la más antigua
-            const snapshot = await db.collection('ventas').orderBy('id', 'desc').get();
+            // Descargar todas las ventas DESDE TU CORE i5
+            const respuesta = await fetch(`${API_BASE_URL}/ventas`);
             
-            globalVentas = [];
-            snapshot.forEach(doc => {
-                globalVentas.push(doc.data());
-            });
+            if (!respuesta.ok) throw new Error("No se pudo conectar al servidor local");
+
+            globalVentas = await respuesta.json();
+            
+            // Ordenar de más reciente a más antigua
+            globalVentas.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
             aplicarFiltros(); 
         } catch (error) {
-            console.error("Error descargando ventas de Firebase:", error);
+            console.error("Error descargando ventas del servidor:", error);
             document.getElementById('ventas-container').innerHTML = `
                 <div class="empty-state" style="border-color: #fca5a5; color: #b91c1c;">
                     <span class="material-icons-outlined" style="font-size: 32px; margin-bottom: 10px;">cloud_off</span>
-                    <p>Error de conexión al cargar el historial.</p>
+                    <p>Error de conexión al cargar el historial del servidor.</p>
                 </div>`;
-            mostrarAlerta("Error de Conexión", "No se pudieron cargar las ventas desde la nube.", "error");
+            mostrarAlerta("Error de Red Local", "No se pudieron cargar las ventas. Asegúrate de que el servidor Core i5 esté encendido y conectado al WiFi.", "error");
         }
     };
 </script>
