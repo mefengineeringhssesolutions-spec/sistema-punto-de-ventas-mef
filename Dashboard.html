@@ -7,8 +7,7 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="api.js"></script>
     <script src="seguridad.js"></script>
 
     <style>
@@ -76,7 +75,7 @@
 
     <div class="system-info">
         <span id="txt-fecha">Generado: --/--/----</span>
-        <span id="status-nube">Conectando a la nube <span class="loader" style="display:inline-block; width:12px; height:12px; border-width:2px; vertical-align:middle; margin-left:4px;"></span></span>
+        <span id="status-nube">Conectando al servidor <span class="loader" style="display:inline-block; width:12px; height:12px; border-width:2px; vertical-align:middle; margin-left:4px;"></span></span>
     </div>
 
     <div class="layout-container">
@@ -141,18 +140,6 @@
     </div>
 
 <script>
-    // 1. INICIALIZAR FIREBASE
-    const firebaseConfig = {
-        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
-        authDomain: "pos-mef-ventas.firebaseapp.com",
-        projectId: "pos-mef-ventas",
-        storageBucket: "pos-mef-ventas.firebasestorage.app",
-        messagingSenderId: "704671042289",
-        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
     const formatoSoles = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' });
     
     const colores = {
@@ -194,10 +181,14 @@
 
     async function descargarYRenderizarDatos() {
         try {
-            // Descargar todas las ventas válidas (no anuladas) de la nube
-            const snapshot = await db.collection('ventas').where('anulado', '==', false).get();
-            const ventasValidas = [];
-            snapshot.forEach(doc => ventasValidas.push(doc.data()));
+            // Descargar todas las ventas de la base de datos local
+            const respuesta = await fetch(`${API_BASE_URL}/ventas`);
+            if (!respuesta.ok) throw new Error("No se pudo conectar al servidor local");
+
+            const todasLasVentas = await respuesta.json();
+            
+            // Filtramos solo las ventas válidas (no anuladas)
+            const ventasValidas = todasLasVentas.filter(v => v.anulado === false);
 
             document.getElementById('status-nube').innerHTML = `Análisis <strong style="color: var(--p-interactive);">Tiempo Real</strong>`;
 
@@ -206,7 +197,7 @@
                     <div class="empty-state">
                         <span class="material-icons-outlined" style="font-size: 36px; color: var(--p-border);">analytics</span>
                         <h3 style="margin-top: 8px; color: var(--p-action-primary); font-size: 14px;">Sin datos para analizar</h3>
-                        <p style="font-size: 12px;">Realiza ventas para que Firebase genere inteligencia de negocio.</p>
+                        <p style="font-size: 12px;">Realiza ventas en el sistema para generar la inteligencia de negocio.</p>
                     </div>`;
                 return;
             }
@@ -217,7 +208,7 @@
             let pagosContador = {}; let productosStats = {};
             let ventasPorVendedor = {}; let ventasPorCliente = {};
 
-            // 2. PROCESAMIENTO INTELIGENTE DE FECHAS (ISO A LOCAL)
+            // 2. PROCESAMIENTO INTELIGENTE DE FECHAS
             ventasValidas.forEach(venta => {
                 const monto = parseFloat(venta.total) || 0;
                 const igv = parseFloat(venta.igv) || 0;
@@ -225,19 +216,20 @@
                 
                 totalIngresos += monto; totalIGV += igv;
                 
-                const metodo = venta.tipoPago || 'Efectivo';
+                const metodo = venta.tipo_pago || venta.tipoPago || 'Efectivo';
                 pagosContador[metodo] = (pagosContador[metodo] || 0) + 1;
 
-                const vendedor = (venta.nombreVendedor || "Desconocido").split(' ')[0];
+                const vendedor = (venta.nombre_vendedor || venta.nombreVendedor || "Desconocido").split(' ')[0];
                 ventasPorVendedor[vendedor] = (ventasPorVendedor[vendedor] || 0) + monto;
 
-                const cliente = (venta.nombreCliente || "").trim();
-                if(venta.dniCliente !== "00000000" && cliente !== "" && !cliente.toUpperCase().includes("FALTA")) {
+                const cliente = (venta.nombre_cliente || venta.nombreCliente || "").trim();
+                const dniCliente = venta.dni_cliente || venta.dniCliente || "";
+                if(dniCliente !== "00000000" && cliente !== "" && !cliente.toUpperCase().includes("FALTA")) {
                     const nombreCorto = cliente.split(' ').slice(0,2).join(' '); 
                     ventasPorCliente[nombreCorto] = (ventasPorCliente[nombreCorto] || 0) + monto;
                 }
 
-                // Traducción de Fechas (De ISO en Firebase a formato peruano para los gráficos)
+                // Traducción de Fechas (Formato Postgres ISO a peruano para gráficos)
                 let fechaCruda = venta.fecha;
                 let dia, mesStr, anioStr;
                 if(fechaCruda.includes('T')) {
@@ -245,6 +237,9 @@
                     dia = String(dObj.getDate()).padStart(2, '0');
                     mesStr = String(dObj.getMonth() + 1).padStart(2, '0');
                     anioStr = dObj.getFullYear();
+                } else if(fechaCruda.includes('-')) {
+                    const parts = fechaCruda.split('-');
+                    dia = parts[2]; mesStr = parts[1]; anioStr = parts[0]; // Asume YYYY-MM-DD
                 } else {
                     const parts = fechaCruda.split('/');
                     dia = parts[0]; mesStr = parts[1]; anioStr = parts[2];
@@ -267,10 +262,10 @@
                     productosStats[nombreProd] += subT;
                 };
 
-                if (venta.productos && venta.productos.length > 0) {
-                    venta.productos.forEach(p => procesarProducto(p.nombre, parseFloat(p.cantidad)||0, parseFloat(p.subtotal)||0));
+                if (venta.productos && Array.isArray(venta.productos) && venta.productos.length > 0) {
+                    venta.productos.forEach(p => procesarProducto(p.nombre_producto || p.nombre || 'Desconocido', parseFloat(p.cantidad)||0, parseFloat(p.subtotal)||0));
                 } else {
-                    procesarProducto(venta.nombreProd || 'Varios', parseFloat(venta.cantidad)||0, monto);
+                    procesarProducto('Varios (Ver Ticket)', parseFloat(venta.cantidad)||0, monto);
                 }
             });
 
@@ -364,7 +359,7 @@
             const etiquetasPagos = Object.keys(pagosContador);
             const coloresPagos = etiquetasPagos.map(p => {
                 if(p === 'Efectivo') return colores.green; if(p === 'Tarjeta') return colores.blue;
-                if(p === 'Yape/Plin') return colores.purple; return colores.gray;
+                if(p === 'Yape/Plin') return colores.purple; if(p === 'EcoPoints') return colores.success; return colores.gray;
             });
             new Chart(document.getElementById('chartPagos').getContext('2d'), {
                 type: 'doughnut',
@@ -374,7 +369,7 @@
 
         } catch (error) {
             console.error("Error cargando dashboard:", error);
-            document.getElementById('status-nube').innerHTML = `<span style="color: var(--p-critical)">Error de Conexión</span>`;
+            document.getElementById('status-nube').innerHTML = `<span style="color: var(--p-critical)">Error de Conexión Local</span>`;
         }
     }
 </script>
