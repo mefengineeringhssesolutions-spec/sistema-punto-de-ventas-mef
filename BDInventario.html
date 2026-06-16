@@ -7,9 +7,8 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="api.js"></script>
     <script src="seguridad.js"></script>
     
     <style>
@@ -172,18 +171,6 @@
     </div>
 
 <script>
-    // 1. INICIALIZAR FIREBASE
-    const firebaseConfig = {
-        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
-        authDomain: "pos-mef-ventas.firebaseapp.com",
-        projectId: "pos-mef-ventas",
-        storageBucket: "pos-mef-ventas.firebasestorage.app",
-        messagingSenderId: "704671042289",
-        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
     // Variables globales para la gestión en memoria
     let globalInventario = [];
     let datosFiltrados = [];
@@ -191,7 +178,7 @@
     const formatoSoles = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' });
 
     // ==========================================
-    // SISTEMA VISUAL DE ALERTAS
+    // SISTEMA VISUAL DE ALERTAS (Elegante)
     // ==========================================
     function mostrarAlerta(titulo, mensaje, tipo = 'warning') {
         const modal = document.getElementById('modal-alerta');
@@ -200,50 +187,63 @@
         
         document.getElementById('alerta-titulo').innerText = titulo;
         document.getElementById('alerta-mensaje').innerText = mensaje;
-        header.className = 'modal-header'; 
         
+        // Limpiamos estilos anteriores
+        header.className = 'modal-header'; 
+        header.style.color = '';
+        
+        // Aplicamos el diseño profesional según el tipo
         if (tipo === 'warning') { header.classList.add('warning'); icon.innerText = 'warning'; } 
         else if (tipo === 'success') { header.style.color = 'var(--p-success)'; icon.innerText = 'check_circle'; }
         else if (tipo === 'error') { header.classList.add('error'); icon.innerText = 'error'; }
+        else if (tipo === 'info') { header.style.color = 'var(--p-interactive)'; icon.innerText = 'info'; } // Estilo azul profesional
 
         modal.style.display = 'flex';
     }
+    
     function cerrarAlerta() { document.getElementById('modal-alerta').style.display = 'none'; }
 
     // ==========================================
-    // DESCARGAR Y PROCESAR INVENTARIO (NUBE)
+    // DESCARGAR Y PROCESAR INVENTARIO (SERVIDOR LOCAL)
     // ==========================================
     async function cargarInventarioNube() {
         try {
-            // 1. Cargar configuración de impuestos y márgenes para cálculos precisos
-            const confSnap = await db.collection('sistema').doc('configuracion').get();
-            if (confSnap.exists) {
-                const data = confSnap.data();
-                configGlobal.igv = parseFloat(data.igv) || 0;
-                configGlobal.descmax = parseFloat(data.descmax) || 0;
-                configGlobal.margenSugerido = parseFloat(data.margenSugerido) || 0;
+            // 1. Cargar configuración de impuestos desde Servidor Local
+            const respuestaConf = await fetch(`${API_BASE_URL}/configuracion`);
+            if (respuestaConf.ok) {
+                const confData = await respuestaConf.json();
+                if (confData.length > 0) {
+                    configGlobal.igv = parseFloat(confData[0].igv) || 0;
+                    configGlobal.descmax = parseFloat(confData[0].descmax) || 0;
+                    configGlobal.margenSugerido = parseFloat(confData[0].margen_sugerido) || 0;
+                }
             }
 
-            // 2. Descargar todos los productos válidos de Firebase
-            const prodSnap = await db.collection('productos').where('anulado', '==', false).get();
+            // 2. Descargar todos los productos válidos desde el Servidor Local
+            const respuestaProd = await fetch(`${API_BASE_URL}/productos`);
+            if (!respuestaProd.ok) throw new Error("Fallo al descargar productos");
+            
+            const prodData = await respuestaProd.json();
             globalInventario = [];
 
             // Factor para extraer el costo unitario puro a partir del precio de venta final
             const factorCalculo = (1 + (configGlobal.margenSugerido / 100)) * (1 + (configGlobal.igv / 100));
 
-            prodSnap.forEach(doc => {
-                const p = doc.data();
+            // Filtramos solo los que no están anulados
+            const productosValidos = prodData.filter(p => p.anulado === false);
+
+            productosValidos.forEach(p => {
                 const stockActual = parseFloat(p.cant) || 0;
-                const precioUnitario = parseFloat(p.precioUnitarioPEN) || 0;
+                const precioUnitario = parseFloat(p.precio_unitario_pen) || 0;
                 
-                // Ingeniería Inversa: Calculamos el costo unitario sin importar si el stock bajó
+                // Ingeniería Inversa: Calculamos el costo unitario basado en el margen del sistema
                 let costoUnitario = 0;
                 if(factorCalculo > 0) {
                     costoUnitario = precioUnitario / factorCalculo;
                 }
 
                 globalInventario.push({
-                    codigo: p.cod,
+                    codigo: p.codigo,
                     nombre: p.nombre,
                     categoria: p.categoria || "General",
                     almacen: p.almacen || "N/A",
@@ -278,9 +278,9 @@
             document.getElementById('contenedor-inventario').innerHTML = `
                 <div class="empty-state" style="border-color: #fca5a5; color: #b91c1c;">
                     <span class="material-icons-outlined" style="font-size: 32px; margin-bottom: 10px;">cloud_off</span>
-                    <p>Error de conexión al cargar la base de datos.</p>
+                    <p>Error de conexión al cargar la base de datos del servidor Core i5.</p>
                 </div>`;
-            mostrarAlerta("Error Crítico", "No se pudo conectar a Firebase para leer el inventario.", "error");
+            mostrarAlerta("Error Crítico", "Verifique que el servidor local esté encendido.", "error");
         }
     }
 
@@ -385,31 +385,54 @@
     }
 
     // ==========================================
-    // UTILIDAD: EXPORTAR INVENTARIO A EXCEL
+   // UTILIDAD: EXPORTAR INVENTARIO A EXCEL (CORREGIDO)
     // ==========================================
     function exportarDatos() {
         if(datosFiltrados.length === 0) {
             return mostrarAlerta("Inventario Vacío", "No hay datos en pantalla para exportar a Excel.", "warning");
         }
 
-        // Mapear solo los datos que se están mostrando actualmente (útil si filtraron por una categoría)
-        const datosExcel = datosFiltrados.map(row => ({
-            "Código SKU": row.codigo,
-            "Nombre del Producto": row.nombre,
-            "Categoría": row.categoria,
-            "Almacén": row.almacen,
-            "Stock Actual": parseFloat(Number(row.stockActual || 0).toFixed(2)),
-            "Costo Unitario (PEN)": parseFloat(Number(row.costoUnitario || 0).toFixed(2)),
-            "Precio Unitario (PEN)": parseFloat(Number(row.precioUnitario || 0).toFixed(2)),
-            "Costo Total Inventario": parseFloat(Math.max(0, row.costoTotal || 0).toFixed(2)),
-            "Valorización Total": parseFloat(Math.max(0, row.precioTotal || 0).toFixed(2))
-        }));
+        // 1. DETECTOR INTELIGENTE DE APLICACIÓN MÓVIL
+        // Evita que el WebView de Flutter se congele al intentar descargar
+        const userAgent = navigator.userAgent.toLowerCase();
+        const esAppNativa = userAgent.includes('wv') || (userAgent.includes('android') && userAgent.includes('version/'));
 
-        const worksheet = XLSX.utils.json_to_sheet(datosExcel);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Stock Actual");
+        if (esAppNativa) {
+            return mostrarAlerta(
+                "Función de Escritorio", 
+                "Por restricciones de seguridad del sistema Android, la aplicación móvil no procesa descargas de archivos Excel.\n\nPara descargar su reporte de inventario, por favor acceda al sistema desde el navegador Google Chrome en una Computadora o Laptop.", 
+                "info"
+            );
+        }
 
-        XLSX.writeFile(workbook, `Reporte_Stock_MEF_${new Date().toISOString().split('T')[0]}.xlsx`);
+        // 2. SI ES NAVEGADOR PC, GENERAMOS EL EXCEL
+        mostrarToast("Generando archivo Excel...");
+
+        // Pequeño retraso para que el Toast se muestre antes de que SheetJS tome el procesador
+        setTimeout(() => {
+            try {
+                const datosExcel = datosFiltrados.map(row => ({
+                    "Código SKU": row.codigo,
+                    "Nombre del Producto": row.nombre,
+                    "Categoría": row.categoria,
+                    "Almacén": row.almacen,
+                    "Stock Actual": parseFloat(Number(row.stockActual || 0).toFixed(2)),
+                    "Costo Unitario (PEN)": parseFloat(Number(row.costoUnitario || 0).toFixed(2)),
+                    "Precio Unitario (PEN)": parseFloat(Number(row.precioUnitario || 0).toFixed(2)),
+                    "Costo Total Inventario": parseFloat(Math.max(0, row.costoTotal || 0).toFixed(2)),
+                    "Valorización Total": parseFloat(Math.max(0, row.precioTotal || 0).toFixed(2))
+                }));
+
+                const worksheet = XLSX.utils.json_to_sheet(datosExcel);
+                const workbook = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(workbook, worksheet, "Stock Actual");
+
+                XLSX.writeFile(workbook, `Reporte_Stock_MEF_${new Date().toISOString().split('T')[0]}.xlsx`);
+            } catch (error) {
+                console.error("Error al generar Excel:", error);
+                mostrarAlerta("Error", "No se pudo generar el archivo Excel.", "error");
+            }
+        }, 300);
     }
 
     // ==========================================
@@ -437,7 +460,7 @@
         const hoy = new Date();
         document.getElementById('fecha-generado').innerText = `Generado: ${hoy.toLocaleDateString('es-PE')}`;
         
-        cargarInventarioNube(); // Dispara la carga de datos desde Firebase
+        cargarInventarioNube(); // Dispara la carga de datos desde el Servidor Local
     };
 </script>
 
