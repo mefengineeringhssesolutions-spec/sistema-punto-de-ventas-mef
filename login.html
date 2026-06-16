@@ -1,3 +1,8 @@
+
+
+
+
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -6,8 +11,7 @@
     <title>MME - Inicio de Sesión</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="api.js"></script>
     <script src="seguridad.js"></script>
     
     <style>
@@ -114,44 +118,10 @@
     </div>
 
 <script>
-    // 1. INICIALIZAR FIREBASE CON TUS LLAVES MAESTRAS
-    const firebaseConfig = {
-        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
-        authDomain: "pos-mef-ventas.firebaseapp.com",
-        projectId: "pos-mef-ventas",
-        storageBucket: "pos-mef-ventas.firebasestorage.app",
-        messagingSenderId: "704671042289",
-        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
-    };
-    
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
-    // 2. CREACIÓN AUTOMÁTICA DEL GERENTE AL CARGAR
-    window.onload = async () => {
+    // PREPARACIÓN DE LA INTERFAZ
+    window.onload = () => {
         document.getElementById('in-dni').focus();
         localStorage.removeItem('isa_sesion'); 
-
-        try {
-            const adminRef = db.collection('usuarios').doc('USR-MASTER');
-            const doc = await adminRef.get();
-            
-            if (!doc.exists) {
-                await adminRef.set({
-                    id: "USR-MASTER",
-                    dni: "73372032",
-                    nombre: "MAX TAYSON MENDOZA ACUÑA",
-                    rol: "Gerente",
-                    celular: "978536345",
-                    estado: "Activo",
-                    password: "C8KM1Y0F1I3K1S6H.&#*",
-                    fechaRegistro: new Date().toISOString()
-                });
-                console.log("¡Usuario Gerente sincronizado en la nube con éxito!");
-            }
-        } catch (error) {
-            console.error("Error conectando a Firebase.", error);
-        }
     };
 
     function mostrarAlerta(titulo, mensaje, tipo = 'error') {
@@ -183,7 +153,7 @@
         }
     }
 
-    // 3. LÓGICA DE LOGIN CONECTADA A LA NUBE
+    // LÓGICA DE LOGIN CONECTADA A TU SERVIDOR POSTGRESQL
     async function procesarLogin() {
         const dniInput = document.getElementById('in-dni').value.trim();
         const passInput = document.getElementById('in-password').value.trim();
@@ -208,17 +178,16 @@
         btnIngresar.disabled = true;
 
         try {
-            const snapshot = await db.collection('usuarios').where('dni', '==', dniInput).get();
+            // Petición POST a tu servidor Core i5
+            const respuesta = await fetch(`${API_BASE_URL}/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dni: dniInput, password: passInput })
+            });
 
-            if (snapshot.empty) {
-                restaurarBoton();
-                return mostrarAlerta('Acceso Denegado', 'El DNI ingresado no existe en los registros.', 'error');
-            }
+            const data = await respuesta.json();
 
-            let usuarioEncontrado = null;
-            snapshot.forEach(doc => { usuarioEncontrado = doc.data(); });
-
-            if (usuarioEncontrado.password !== passInput) {
+            if (!respuesta.ok) {
                 restaurarBoton();
                 if (!bloqueos[dniInput]) bloqueos[dniInput] = { intentos: 0, bloqueadoHasta: 0 };
                 bloqueos[dniInput].intentos += 1;
@@ -230,9 +199,12 @@
                 } else {
                     localStorage.setItem('isa_seguridad_bloqueos', JSON.stringify(bloqueos));
                     let intRestantes = 3 - bloqueos[dniInput].intentos;
-                    return mostrarAlerta('Acceso Denegado', `Contraseña incorrecta. Quedan ${intRestantes} intento(s).`, 'error');
+                    return mostrarAlerta('Acceso Denegado', `${data.error} Quedan ${intRestantes} intento(s).`, 'error');
                 }
             }
+
+            // Credenciales correctas
+            const usuarioEncontrado = data.usuario;
 
             if (usuarioEncontrado.estado === 'Inactivo') {
                 restaurarBoton();
@@ -245,7 +217,7 @@
             }
 
             localStorage.setItem('isa_sesion', JSON.stringify({
-                id: usuarioEncontrado.id,
+                id: usuarioEncontrado.id_usuario,
                 dni: usuarioEncontrado.dni,
                 nombre: usuarioEncontrado.nombre,
                 rol: usuarioEncontrado.rol
@@ -259,7 +231,7 @@
 
         } catch (error) {
             restaurarBoton();
-            mostrarAlerta('Fallo de Conexión', 'No se pudo contactar con la nube. Revise su internet.', 'error');
+            mostrarAlerta('Fallo de Conexión', 'Detalle técnico: ' + error.message, 'error');
             console.error(error);
         }
 
