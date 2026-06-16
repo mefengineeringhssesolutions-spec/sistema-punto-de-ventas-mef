@@ -26,7 +26,7 @@
 
             modal.innerHTML = `
                 <div style="padding: 24px 20px 10px; color: #b98900;">
-                    <span class="material-icons-outlined" style="font-size: 48px; margin-bottom: 8px;">security_update_warning</span>
+                    <span class="material-icons-outlined" style="font-size: 48px; margin-bottom: 8px;">gpp_bad</span>
                     <h3 style="font-size: 18px; margin: 0; color: #202223;">Sesión Expirada</h3>
                 </div>
                 <div style="padding: 0 20px 24px; color: #6d7175; font-size: 14px; line-height: 1.5;">
@@ -34,7 +34,7 @@
                 </div>
                 <div style="padding: 16px 20px; background: #f8fafc; border-top: 1px solid #c9cccf;">
                     <button id="btn-entendido-expirado" style="width: 100%; background: #1e293b; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: 700; font-size: 14px; cursor: pointer; transition: background 0.2s;">
-                        Entendido
+                        Volver a Ingresar
                     </button>
                 </div>
             `;
@@ -111,6 +111,7 @@
     document.addEventListener('keypress', registrarActividad);
     document.addEventListener('scroll', registrarActividad);
     document.addEventListener('click', registrarActividad);
+    document.addEventListener('touchstart', registrarActividad); // Soporte extra para móviles
 
     // ==========================================
     // 4. BLOQUEO DE CURIOSOS (ANTI-HACKERS BÁSICOS)
