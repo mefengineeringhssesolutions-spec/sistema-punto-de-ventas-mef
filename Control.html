@@ -6,8 +6,7 @@
     <title>M.E.F. - Panel de Control</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="api.js"></script>
     <script src="seguridad.js"></script>
 
     <style>
@@ -164,18 +163,6 @@
     </div>
 
     <script>
-        // 1. INICIALIZAR FIREBASE (Preparado para futuras lecturas en el Panel)
-        const firebaseConfig = {
-            apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
-            authDomain: "pos-mef-ventas.firebaseapp.com",
-            projectId: "pos-mef-ventas",
-            storageBucket: "pos-mef-ventas.firebasestorage.app",
-            messagingSenderId: "704671042289",
-            appId: "1:704671042289:web:3f3b78992eb2863e25f750"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
-
         // ==========================================
         // GUARDIÁN DE SEGURIDAD (CONTROL DE ROLES)
         // ==========================================
@@ -241,7 +228,7 @@
 
         function ejecutarCerrarSesion() {
             localStorage.removeItem('isa_sesion'); 
-            window.location.href = 'login.html'; // Corregido: redirige al archivo de login
+            window.location.href = 'login.html'; 
         }
     </script>
 
