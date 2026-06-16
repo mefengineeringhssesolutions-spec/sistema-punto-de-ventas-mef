@@ -6,8 +6,7 @@
     <title>M.E.F. - Gestión de Usuarios</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="api.js"></script>
     <script src="seguridad.js"></script>
 
     <style>
@@ -264,19 +263,7 @@
     </div>
 
 <script>
-    // 1. INICIALIZAR FIREBASE CON TUS LLAVES MAESTRAS
-    const firebaseConfig = {
-        apiKey: "AIzaSyBkF4sLasIwUXH8hXSDTVbl1pXcUfHsGHg",
-        authDomain: "pos-mef-ventas.firebaseapp.com",
-        projectId: "pos-mef-ventas",
-        storageBucket: "pos-mef-ventas.firebasestorage.app",
-        messagingSenderId: "704671042289",
-        appId: "1:704671042289:web:3f3b78992eb2863e25f750"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-
-    // Variable global para almacenar los usuarios descargados
+    // Variable global para almacenar los usuarios descargados desde Node.js
     let globalUsuarios = [];
 
     // ==========================================
@@ -326,7 +313,7 @@
         contenedor.innerHTML = '';
 
         if(datos.length === 0) {
-            contenedor.innerHTML = `<div class="empty-state">No se encontraron usuarios en la base de datos de la nube.</div>`;
+            contenedor.innerHTML = `<div class="empty-state">No se encontraron usuarios en la base de datos del servidor.</div>`;
             document.getElementById('kpi-total').innerText = 0;
             return;
         }
@@ -338,7 +325,7 @@
             else if (item.rol === "Gerente" || item.rol === "Logística") claseBadge = "gerente";
 
             // Etiqueta visual para ti (Gerente Maestro)
-            const esElGerenteMaestro = (item.id === "USR-MASTER");
+            const esElGerenteMaestro = (item.id_usuario === "USR-MASTER");
 
             const card = document.createElement('div');
             card.className = 'user-card';
@@ -367,10 +354,10 @@
                     </div>
                 </div>
                 <div class="card-actions">
-                    <button class="btn-action" onclick="editarUsuario('${item.id}')" style="color: var(--p-interactive);">
+                    <button class="btn-action" onclick="editarUsuario('${item.id_usuario}')" style="color: var(--p-interactive);">
                         <span class="material-icons-outlined" style="font-size:16px;">edit</span> Editar
                     </button>
-                    <button class="btn-action" onclick="eliminarUsuarioNube('${item.id}', '${item.rol}')" style="border-left: 1px solid var(--p-border); color: var(--p-critical);">
+                    <button class="btn-action" onclick="eliminarUsuarioNube('${item.id_usuario}', '${item.rol}')" style="border-left: 1px solid var(--p-border); color: var(--p-critical);">
                         <span class="material-icons-outlined" style="font-size:16px;">delete</span> Eliminar
                     </button>
                 </div>
@@ -398,10 +385,10 @@
     // CONTROL DEL FORMULARIO DE EDICIÓN
     // ==========================================
     function editarUsuario(id) {
-        const userToEdit = globalUsuarios.find(u => u.id === id);
+        const userToEdit = globalUsuarios.find(u => u.id_usuario === id);
 
         if (userToEdit) {
-            document.getElementById('edit-id').value = userToEdit.id;
+            document.getElementById('edit-id').value = userToEdit.id_usuario;
             document.getElementById('in-dni').value = userToEdit.dni;
             document.getElementById('in-nombre').value = userToEdit.nombre;
             document.getElementById('in-rol').value = userToEdit.rol;
@@ -410,7 +397,7 @@
             document.getElementById('in-password').value = userToEdit.password;
             
             // Si es el gerente maestro, bloquear cambio de rol y estado
-            if (userToEdit.id === "USR-MASTER") {
+            if (userToEdit.id_usuario === "USR-MASTER") {
                 document.getElementById('in-rol').disabled = true;
                 document.getElementById('in-estado').disabled = true;
             } else {
@@ -443,16 +430,18 @@
     }
 
     // ==========================================
-    // LÓGICA DE ACTUALIZACIÓN EN LA NUBE
+    // LÓGICA DE ACTUALIZACIÓN EN SERVIDOR LOCAL
     // ==========================================
     async function guardarEdicionUsuario() {
         const editId = document.getElementById('edit-id').value;
         const nombre = document.getElementById('in-nombre').value.trim().toUpperCase();
+        
         // Si el rol o el estado están bloqueados (por ser USR-MASTER), usamos el valor actual que tenga en la memoria
         const rolSelect = document.getElementById('in-rol');
         const estadoSelect = document.getElementById('in-estado');
-        const rol = rolSelect.disabled ? globalUsuarios.find(u=>u.id===editId).rol : rolSelect.value;
-        const estado = estadoSelect.disabled ? globalUsuarios.find(u=>u.id===editId).estado : estadoSelect.value;
+        const rol = rolSelect.disabled ? globalUsuarios.find(u=>u.id_usuario===editId).rol : rolSelect.value;
+        const estado = estadoSelect.disabled ? globalUsuarios.find(u=>u.id_usuario===editId).estado : estadoSelect.value;
+        
         const celular = document.getElementById('in-celular').value.trim();
         const password = document.getElementById('in-password').value.trim();
         const btnForm = document.getElementById('btn-guardar-form');
@@ -463,19 +452,29 @@
         btnForm.disabled = true;
         btnForm.innerHTML = `<span class="material-icons-outlined" style="font-size: 18px;">cloud_upload</span> ACTUALIZANDO...`;
 
+        const usuarioActualizado = {
+            nombre: nombre,
+            rol: rol,
+            celular: celular,
+            estado: estado,
+            password: password
+        };
+
         try {
-            // Actualizar en Firebase
-            const userRef = db.collection('usuarios').doc(editId);
-            await userRef.update({
-                nombre: nombre,
-                rol: rol,
-                celular: celular,
-                estado: estado,
-                password: password
+            // Actualizar en el servidor Core i5
+            const respuesta = await fetch(`${API_BASE_URL}/usuarios/${editId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(usuarioActualizado)
             });
 
+            if (!respuesta.ok) {
+                const data = await respuesta.json();
+                throw new Error(data.error || "No se pudo actualizar en el servidor");
+            }
+
             // Actualizar en la memoria local para no recargar la página entera
-            const index = globalUsuarios.findIndex(u => u.id === editId);
+            const index = globalUsuarios.findIndex(u => u.id_usuario === editId);
             if (index !== -1) {
                 globalUsuarios[index].nombre = nombre;
                 globalUsuarios[index].rol = rol;
@@ -486,20 +485,19 @@
 
             cerrarFormulario();
             aplicarFiltros(); 
-            mostrarToast("Datos actualizados con éxito en Firebase");
-            btnForm.disabled = false;
-            btnForm.innerHTML = `<span class="material-icons-outlined" style="font-size: 18px;">update</span> Actualizar`;
+            mostrarToast("Datos actualizados con éxito en el servidor");
 
         } catch (error) {
             console.error("Error al actualizar usuario:", error);
-            mostrarAlerta("Error Crítico", "No se pudo actualizar el usuario en la Nube. Verifique su internet.", "error");
+            mostrarAlerta("Error Crítico", "No se pudo conectar con la Core i5 para actualizar.", "error");
+        } finally {
             btnForm.disabled = false;
             btnForm.innerHTML = `<span class="material-icons-outlined" style="font-size: 18px;">update</span> Actualizar`;
         }
     }
 
     // ==========================================
-    // ELIMINACIÓN SEGURA EN LA NUBE
+    // ELIMINACIÓN SEGURA EN EL SERVIDOR LOCAL
     // ==========================================
     function eliminarUsuarioNube(id, rol) {
         // Bloqueo de seguridad: No se puede eliminar al Gerente Maestro
@@ -514,19 +512,26 @@
             }
         }
 
-        mostrarConfirmacion("¿Estás seguro de que deseas ELIMINAR a este empleado de la Nube?\n\nPerderá todo acceso al Punto de Ventas y al panel de control.", async () => {
-            mostrarToast("Eliminando de la nube...");
+        mostrarConfirmacion("¿Estás seguro de que deseas ELIMINAR a este empleado del servidor?\n\nPerderá todo acceso al Punto de Ventas y al panel de control.", async () => {
+            mostrarToast("Eliminando del servidor...");
             try {
-                // Eliminar de Firebase
-                await db.collection('usuarios').doc(id).delete();
+                // Eliminar en PostgreSQL a través de Node.js
+                const respuesta = await fetch(`${API_BASE_URL}/usuarios/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (!respuesta.ok) {
+                    throw new Error("No se pudo eliminar en el servidor");
+                }
                 
                 // Actualizar la lista en memoria
-                globalUsuarios = globalUsuarios.filter(u => u.id !== id);
+                globalUsuarios = globalUsuarios.filter(u => u.id_usuario !== id);
                 aplicarFiltros(); 
                 mostrarToast("Usuario eliminado correctamente");
+
             } catch (error) {
                 console.error("Error al eliminar usuario:", error);
-                mostrarAlerta("Error Crítico", "No se pudo eliminar al usuario de la Nube.", "error");
+                mostrarAlerta("Error Crítico", "No se pudo eliminar al usuario del servidor. Verifique su conexión.", "error");
             }
         });
     }
@@ -551,23 +556,22 @@
         document.getElementById('txt-fecha').innerHTML = `Generado: <strong>${hoy.toLocaleDateString('es-PE')}</strong>`;
         
         try {
-            // Descargar usuarios desde Firebase
-            const snapshot = await db.collection('usuarios').get();
+            // Descargar usuarios desde el Servidor Node.js
+            const respuesta = await fetch(`${API_BASE_URL}/usuarios`);
             
-            globalUsuarios = [];
-            snapshot.forEach(doc => {
-                globalUsuarios.push(doc.data());
-            });
-
+            if (!respuesta.ok) throw new Error("Fallo de conexión");
+            
+            globalUsuarios = await respuesta.json();
+            
             aplicarFiltros(); 
         } catch (error) {
-            console.error("Error descargando usuarios de Firebase:", error);
+            console.error("Error descargando usuarios del servidor:", error);
             document.getElementById('usuarios-container').innerHTML = `
                 <div class="empty-state" style="border-color: #fca5a5; color: #b91c1c;">
                     <span class="material-icons-outlined" style="font-size: 32px; margin-bottom: 10px;">cloud_off</span>
-                    <p>Error de conexión al cargar los usuarios desde la Nube.</p>
+                    <p>Error de conexión al cargar los usuarios desde la Core i5.</p>
                 </div>`;
-            mostrarAlerta("Error de Conexión", "No se pudieron cargar los usuarios desde Firebase.", "error");
+            mostrarAlerta("Error de Conexión", "No se pudieron cargar los usuarios desde el servidor local.", "error");
         }
     };
 </script>
