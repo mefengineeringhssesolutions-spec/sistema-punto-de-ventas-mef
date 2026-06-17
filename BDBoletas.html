@@ -6,7 +6,6 @@
     <title>M.E.F. - Historial de Ventas</title>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
     
-    <!-- LIBRERÍAS DE FIREBASE ELIMINADAS. AHORA USAMOS TU PROPIA RED -->
     <script src="api.js"></script>
     <script src="seguridad.js"></script>
     <style>
@@ -216,7 +215,6 @@
 <script src="ticket.js"></script>
 
 <script>
-    // Variable global para almacenar las ventas descargadas
     let globalVentas = [];
 
     // ==========================================
@@ -323,10 +321,8 @@
                 descuentoHtml = `<div class="fin-detail" style="color: var(--danger);"><span>Descuento:</span> <span>-${formatoSoles.format(descuentoValor)}</span></div>`;
             }
 
-            // Validar boleta para interfaz
             const boletaSegura = item.boleta ? String(item.boleta).padStart(6, '0') : '000000';
             
-            // Validar formato de fecha
             let fechaMostrada = item.fecha || '--/--/----';
             if(fechaMostrada.includes('T')) {
                 const fObj = new Date(fechaMostrada);
@@ -391,7 +387,6 @@
         const valCliente = document.getElementById('filtro-cliente').value.toLowerCase().trim();
 
         if(valFecha) {
-            // Formatear la fecha del input (YYYY-MM-DD) al formato local peruano que guardamos (DD/MM/YYYY)
             const parts = valFecha.split('-');
             valFecha = `${parts[2]}/${parts[1]}/${parts[0]}`; 
         }
@@ -422,7 +417,7 @@
     }
 
     // ==========================================
-    // ANULAR VENTA EN EL SERVIDOR (POSTGRESQL)
+    // ANULAR VENTA EN EL SERVIDOR
     // ==========================================
     function anularVentaNube(idVenta, boletaTexto) {
         mostrarConfirmacion(
@@ -431,7 +426,6 @@
                 mostrarToast("Procesando anulación en el servidor...");
                 
                 try {
-                    // Llamamos a tu nuevo servidor Core i5
                     const response = await fetch(`${API_BASE_URL}/ventas/${idVenta}/anular`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' }
@@ -441,7 +435,6 @@
                         throw new Error("El servidor no pudo procesar la anulación");
                     }
 
-                    // Actualizar memoria local para no recargar la página entera
                     const venta = globalVentas.find(v => (v.id_venta || v.id) === idVenta);
                     if(venta) venta.anulado = true;
                     
@@ -457,7 +450,7 @@
     }
 
     // ==========================================
-    // IMPRESIÓN CENTRALIZADA A TICKET.JS
+    // IMPRESIÓN CENTRALIZADA CON CAPA DE COMPATIBILIDAD
     // ==========================================
     function llamarImpresion(id) {
         const venta = globalVentas.find(v => (v.id_venta || v.id) === id);
@@ -465,17 +458,42 @@
         if(!venta) return mostrarAlerta("Error de Lectura", "No se pudo recuperar la información de este ticket en la memoria.", "error");
 
         if (typeof imprimirTicketGlobal === 'function') {
-            imprimirTicketGlobal(venta);
+            
+            const ventaParaTicket = {
+                ...venta,
+                dniCliente: venta.dni_cliente || venta.dniCliente || "S/D",
+                nombreCliente: venta.nombre_cliente || venta.nombreCliente || "Cliente General",
+                idVendedor: venta.id_vendedor || venta.idVendedor || "CAJA",
+                nombreVendedor: venta.nombre_vendedor || venta.nombreVendedor || "Cajero",
+                tipoPago: venta.tipo_pago || venta.tipoPago || "Efectivo",
+                desc: venta.descuento || venta.desc || 0,
+                fecha: venta.fecha_registro || venta.fecha || new Date().toISOString(),
+                
+                // ⚠️ AHORA SÍ LEERÁ EL RECIBIDO Y EL CAMBIO DE LA BASE DE DATOS
+                // (Si es una boleta vieja que no tenía el dato, pondrá el total por defecto)
+                recibido: parseFloat(venta.recibido) || parseFloat(venta.total) || 0,
+                cambio: parseFloat(venta.cambio) || 0
+            };
+            
+            if (ventaParaTicket.productos && ventaParaTicket.productos.length > 0) {
+                ventaParaTicket.productos = ventaParaTicket.productos.map(p => ({
+                    ...p,
+                    nombreProd: p.nombre_producto || p.nombre || 'Producto',
+                    precioUn: p.precio_unitario || p.precio || 0,
+                    total: p.subtotal || 0
+                }));
+            }
+
+            imprimirTicketGlobal(ventaParaTicket);
         } else {
             mostrarAlerta("Librería Faltante", "El módulo de impresión ('ticket.js') no está conectado correctamente.", "error");
         }
     }
 
     // ==========================================
-    // INICIALIZACIÓN Y DESCARGA DESDE CORE I5
+    // INICIALIZACIÓN
     // ==========================================
     window.onload = async () => {
-        // --- INICIO DEL GUARDIÁN ---
         const sesionStr = localStorage.getItem('isa_sesion');
         if (!sesionStr) {
             window.location.href = 'login.html';
@@ -488,20 +506,16 @@
             window.location.href = 'Control.html'; 
             return;
         }
-        // --- FIN DEL GUARDIÁN ---
 
         const hoy = new Date();
         document.getElementById('txt-fecha').innerHTML = `Generado: <strong>${hoy.toLocaleDateString('es-PE')}</strong>`;
         
         try {
-            // Descargar todas las ventas DESDE TU CORE i5
             const respuesta = await fetch(`${API_BASE_URL}/ventas`);
             
             if (!respuesta.ok) throw new Error("No se pudo conectar al servidor local");
 
             globalVentas = await respuesta.json();
-            
-            // Ordenar de más reciente a más antigua
             globalVentas.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
             aplicarFiltros(); 
