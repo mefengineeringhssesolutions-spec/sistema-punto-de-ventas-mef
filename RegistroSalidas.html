@@ -390,7 +390,7 @@
     }
 
     // ==========================================
-    // FUNCIONES DE SESIÓN Y CARRITO
+    // FUNCIONES DE SESIÓN Y CARRITO (CORREGIDA PARA POSTGRESQL)
     // ==========================================
     function cargarDatosSesion() {
         const sesionStr = localStorage.getItem('isa_sesion');
@@ -402,7 +402,8 @@
             window.location.href = 'Control.html'; return;
         }
 
-        idVendedorActual = sesion.id || "SIN-ID";
+        // CORRECCIÓN: Leemos id_usuario porque así se llama la columna en PostgreSQL
+        idVendedorActual = sesion.id_usuario || sesion.id || "SIN-ID";
         nombreVendedorActual = sesion.nombre || "Vendedor Desconocido";
         
         const primerNombre = nombreVendedorActual.split(' ')[0];
@@ -428,7 +429,7 @@
     }
 
     // ==========================================
-    // BÚSQUEDA INTELIGENTE DE PRODUCTOS (POSTGRESQL)
+    // BÚSQUEDA INTELIGENTE DE PRODUCTOS
     // ==========================================
     async function buscarYAgregarProducto() {
         const inputCodigo = document.getElementById('in-codigo');
@@ -535,7 +536,7 @@
     function eliminarDelCarrito(index) { carrito.splice(index, 1); renderizarCarrito(); }
 
     // ==========================================
-    // BÚSQUEDA BLINDADA DE CLIENTES (CORREGIDA)
+    // BÚSQUEDA BLINDADA DE CLIENTES
     // ==========================================
     async function buscarCliente() {
         const dniBuscado = document.getElementById('in-dni').value.trim();
@@ -551,15 +552,11 @@
 
         try {
             let clienteEncontrado = null;
-
-            // Intento 1: Ruta rápida directa al DNI
             const respuesta = await fetch(`${API_BASE_URL}/clientes/${dniBuscado}`);
             
             if(respuesta.ok) {
                 clienteEncontrado = await respuesta.json();
             } else {
-                // Intento 2 (FALLBACK): Si la ruta directa falla, descargamos todos y filtramos.
-                // CORRECCIÓN: Usamos String() para forzar que los números y textos coincidan siempre.
                 const respuestaTodos = await fetch(`${API_BASE_URL}/clientes`);
                 if(respuestaTodos.ok) {
                     const todosLosClientes = await respuestaTodos.json();
@@ -568,7 +565,6 @@
             }
 
             if(clienteEncontrado) {
-                // Cubrimos todas las posibles formas en las que la BD llame a la columna
                 inputCliente.value = clienteEncontrado.nombre_completo || clienteEncontrado.nombreCompleto || clienteEncontrado.nombre || "SIN NOMBRE";
                 inputCliente.setAttribute('readonly', true); 
                 document.getElementById('toast').style.display = 'none';
@@ -586,32 +582,28 @@
     }
 
     // ==========================================
-    // CÁLCULO PRECISO (INGENIERÍA INVERSA IGV)
+    // CÁLCULO PRECISO
     // ==========================================
     function validarYCalcular() {
-        // 1. Suma de la tabla de productos (PRECIO FINAL EN VITRINA, YA INCLUYE IGV)
         let sumaBruta = carrito.reduce((sum, item) => sum + item.subtotal, 0);
         
-        // 2. Calculamos descuento si lo hay (sobre la suma bruta)
         descuentoMonto = sumaBruta * (descuentoPorcentaje / 100);
         let totalNetoProductos = sumaBruta - descuentoMonto;
         
-        // 3. Extraemos IGV hacia atrás (Ingeniería Inversa)
         const rowIgv = document.getElementById('row-igv');
         if (document.getElementById('chk-igv').checked && totalNetoProductos > 0) {
             let factorIGV = 1 + (cfgGlobal.igv / 100);
-            subtotalVenta = totalNetoProductos / factorIGV; // Base Imponible (Subtotal real)
+            subtotalVenta = totalNetoProductos / factorIGV; 
             igvMonto = totalNetoProductos - subtotalVenta;
             
             document.getElementById('ticket-igv').innerText = `S/. ${igvMonto.toFixed(2)}`;
             rowIgv.style.display = 'flex';
         } else {
-            subtotalVenta = totalNetoProductos; // Si no hay IGV marcado
+            subtotalVenta = totalNetoProductos; 
             igvMonto = 0; 
             rowIgv.style.display = 'none';
         }
 
-        // 4. Bolsa Plástica (Se suma por separado al final)
         const rowBolsa = document.getElementById('row-bolsa');
         if (document.getElementById('chk-ibcper').checked) {
             bolsaMonto = cfgGlobal.bolsa;
@@ -622,7 +614,6 @@
             rowBolsa.style.display = 'none';
         }
 
-        // 5. Mostrar Descuento
         const rowDescuento = document.getElementById('row-descuento');
         if (descuentoPorcentaje > 0) {
             document.getElementById('ticket-descuento').innerText = `-S/. ${descuentoMonto.toFixed(2)}`;
@@ -632,11 +623,8 @@
             rowDescuento.style.display = 'none'; 
         }
 
-        // 6. El Total a Pagar es el Neto de los productos + la Bolsa
         totalVenta = Math.round((totalNetoProductos + bolsaMonto) * 100) / 100;
 
-        // 7. Actualizamos la UI
-        // El subtotal a mostrar en el ticket ahora es la Base Imponible limpia
         document.getElementById('ticket-subtotal').innerText = `S/. ${subtotalVenta.toFixed(2)}`;
         document.getElementById('ticket-total').innerText = `S/. ${totalVenta.toFixed(2)}`;
         
@@ -674,7 +662,7 @@
     }
 
     // ==========================================
-    // LIMPIEZA Y GUARDADO DE LA VENTA EN EL SERVIDOR
+    // GUARDADO DE LA VENTA EN EL SERVIDOR
     // ==========================================
     function limpiarFormulario() {
         carrito = []; descuentoPorcentaje = 0; descuentoMonto = 0; 
@@ -711,10 +699,9 @@
         const tipoPagoActivo = document.querySelector('.pay-btn.active').getAttribute('data-tipo');
         const nroBoleta = document.getElementById('bar-boleta').innerText;
 
-        // Construimos el objeto a enviar a Node.js
         const nuevaVenta = {
             boleta: nroBoleta,
-            dni_cliente: document.getElementById('in-dni').value || "00000000",
+            dni_cliente: document.getElementById('in-dni').value || "S/D",
             nombre_cliente: nombreCliente,
             id_vendedor: idVendedorActual,
             nombre_vendedor: nombreVendedorActual,
@@ -751,13 +738,20 @@
             }
 
             const dataGuardada = await respuesta.json();
-
             mostrarToast("Venta procesada con éxito");
             
-            // Reconstruimos el objeto para que el ticket.js actual lo entienda
+            // CORRECCIÓN CLAVE: Pasamos TODOS los formatos posibles (antiguos y nuevos) 
+            // al ticket.js para forzar que los imprima sin importar qué versión esté en caché.
             if(typeof imprimirTicketGlobal === 'function') {
                 const ventaParaTicket = {
                     ...nuevaVenta,
+                    // Compatibilidad forzada (CamelCase):
+                    dniCliente: nuevaVenta.dni_cliente,
+                    nombreCliente: nuevaVenta.nombre_cliente,
+                    idVendedor: nuevaVenta.id_vendedor,
+                    nombreVendedor: nuevaVenta.nombre_vendedor,
+                    tipoPago: nuevaVenta.tipo_pago,
+                    
                     fecha: dataGuardada.fecha_registro || new Date().toISOString(),
                     desc: nuevaVenta.descuento,
                     precioUn: nuevaVenta.productos.length === 1 ? nuevaVenta.productos[0].precio : 0,
