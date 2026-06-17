@@ -34,10 +34,8 @@
 
         .form-layout { padding: 16px; max-width: 650px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; position: relative; z-index: 1;}
         
-        /* CORRECCIÓN: overflow: visible para que los menús no se corten */
         .polaris-card { background: var(--p-surface); border-radius: 8px; box-shadow: var(--p-shadow-card); overflow: visible; position: relative; }
         
-        /* JERARQUÍA Z-INDEX: La tarjeta de arriba debe tapar a la de abajo al desplegarse */
         #form-ingreso > .polaris-card:nth-child(1) { z-index: 30; }
         #form-ingreso > .polaris-card:nth-child(2) { z-index: 20; }
         #form-ingreso > .polaris-card:nth-child(3) { z-index: 10; }
@@ -63,9 +61,6 @@
 
         #in-nombre, #in-codigo, #in-documento { text-transform: uppercase; }
 
-        /* ==========================================
-           NUEVOS SELECTORES PROFESIONALES CUSTOM
-           ========================================== */
         .custom-select-wrapper { position: relative; width: 100%; user-select: none; z-index: 50; }
         .custom-select-trigger {
             display: flex; justify-content: space-between; align-items: center;
@@ -303,7 +298,6 @@
     });
 
     function toggleDropdown(wrapperId) {
-        // Cierra los demás antes de abrir el actual
         document.querySelectorAll('.custom-select-wrapper').forEach(el => {
             if (el.id !== wrapperId) el.classList.remove('open');
         });
@@ -314,12 +308,12 @@
         document.getElementById(`in-${tipo}`).value = valor;
         const textoVisual = document.getElementById(`text-${tipo}`);
         textoVisual.innerText = valor;
-        textoVisual.parentElement.classList.add('selected'); // Cambia a letra negra negrita
+        textoVisual.parentElement.classList.add('selected'); 
         document.getElementById(`wrapper-${tipo}`).classList.remove('open');
     }
 
     // ==========================================
-    // SISTEMA VISUAL DE ALERTAS (Elegante)
+    // SISTEMA VISUAL DE ALERTAS
     // ==========================================
     let alertaCallback = null;
 
@@ -356,7 +350,7 @@
     }
 
     // ==========================================
-    // INICIALIZACIÓN Y DESCARGA DESDE SERVIDOR LOCAL
+    // INICIALIZACIÓN Y DESCARGA
     // ==========================================
     window.onload = async () => {
         const sesionStr = localStorage.getItem('isa_sesion');
@@ -437,15 +431,15 @@
     }
 
     // ==========================================
-    // GUARDAR MANUALMENTE UN INGRESO (POSTGRESQL)
+    // GUARDAR MANUALMENTE UN INGRESO
     // ==========================================
     async function guardarIngreso() {
         const numDoc = document.getElementById('in-documento').value.trim().toUpperCase();
         const codProd = document.getElementById('in-codigo').value.trim().toUpperCase();
         const nombreProd = document.getElementById('in-nombre').value.trim().toUpperCase();
-        const categoria = document.getElementById('in-categoria').value; // Lee del input oculto
-        const almacen = document.getElementById('in-almacen').value; // Lee del input oculto
-        const unidad = document.getElementById('in-unidad').value; // Lee del input oculto
+        const categoria = document.getElementById('in-categoria').value; 
+        const almacen = document.getElementById('in-almacen').value; 
+        const unidad = document.getElementById('in-unidad').value; 
         const cantidad = parseFloat(document.getElementById('in-cantidad').value);
         const costoTotal = parseFloat(document.getElementById('in-costo-total').value);
         const btnGuardar = document.getElementById('btn-guardar');
@@ -459,6 +453,7 @@
         btnGuardar.disabled = true;
 
         const nuevoIngreso = {
+            documento: numDoc, // <-- AQUÍ SE ENVÍA EL NÚMERO DE DOCUMENTO AL BACKEND
             codigo: codProd,
             nombre: nombreProd,
             categoria: categoria,
@@ -469,6 +464,8 @@
             precio_unitario_pen: parseFloat(document.getElementById('in-precio-calculado').value),
             fecha_ingreso: document.getElementById('in-fecha').value
         };
+
+        console.log("Enviando paquete al servidor:", nuevoIngreso);
 
         try {
             const respuesta = await fetch(`${API_BASE_URL}/productos`, {
@@ -497,9 +494,8 @@
     }
 
     // ==========================================
-    // PROTECCIÓN DE APP MÓVIL (IMPORTACIÓN/EXPORTACIÓN)
+    // IMPORTACIÓN MASIVA DE EXCEL
     // ==========================================
-    
     function esDispositivoMovil() {
         const userAgent = navigator.userAgent.toLowerCase();
         return userAgent.includes('wv') || (userAgent.includes('android') && userAgent.includes('version/'));
@@ -603,6 +599,7 @@
                     const precioSug = parseFloat(((costoUnitario + (costoUnitario * (globalMargen / 100))) * (1 + (globalIgv / 100))).toFixed(2));
 
                     productosMasivos.push({
+                        documento: numDoc, // <-- AQUÍ SE ENVÍA EL NÚMERO DE DOCUMENTO DESDE EL EXCEL
                         codigo: codProd,
                         nombre: nombreProd,
                         categoria: categoria,
@@ -615,7 +612,6 @@
                     });
                 }
 
-                // Enviar todo el array en un solo golpe a Node.js
                 const respuesta = await fetch(`${API_BASE_URL}/productos/masivo`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
