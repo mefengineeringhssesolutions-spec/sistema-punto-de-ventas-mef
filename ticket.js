@@ -166,7 +166,7 @@ async function imprimirTicketGlobal(ventaObj) {
             </table>
             
             <div class="center bold" style="margin-top:20px; font-size: 12px; word-break: break-word;">${DATOS_EMPRESA.mensajeFinal}</div>
-            <div class="center" style="font-size:9px; margin-top:8px; color: #555;">MME ENGINEERING & SOLUCIONES</div>
+            <div class="center" style="font-size:9px; margin-top:8px; color: #555;">MEF ENGINEERING & HSE SOLUCIONES</div>
             <br><br><br>
         </body>
         </html>
