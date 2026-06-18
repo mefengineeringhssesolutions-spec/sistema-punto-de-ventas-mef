@@ -42,6 +42,8 @@
 
         .search-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
         .search-title { font-size: 12px; font-weight: 700; margin-bottom: 8px; color: var(--primary); display: flex; align-items: center; gap: 5px; }
+        
+        /* CORRECCIÓN: Cuadrícula 2x2 para 4 filtros */
         .search-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
         .search-input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text-main); background: var(--bg-body); transition: border 0.2s, box-shadow 0.2s; }
         .search-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(30, 41, 59, 0.1); background: var(--surface);}
@@ -59,11 +61,11 @@
         .entry-card.anulado .product-title { text-decoration: line-through; color: var(--danger); }
         
         .entry-card-header { background: #f8fafc; padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
-        .entry-card-header .doc-id { font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 4px;}
+        .entry-card-header .doc-id { font-weight: 800; color: var(--primary); display: flex; align-items: center; gap: 6px;}
         .entry-card-header .date { color: var(--text-muted); font-weight: 500;}
         
         .entry-card-body { padding: 14px 16px; }
-        .product-title { font-size: 15px; font-weight: 700; color: var(--text-main); margin-bottom: 4px; line-height: 1.3; word-break: break-word;}
+        .product-title { font-size: 15px; font-weight: 800; color: var(--text-main); margin-bottom: 4px; line-height: 1.3; word-break: break-word;}
         .product-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
         
         .financial-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; background: var(--bg-body); padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
@@ -138,9 +140,10 @@
                     <span class="material-icons-round" style="font-size: 16px;">manage_search</span> Filtros de Búsqueda
                 </div>
                 <div class="search-grid">
+                    <input type="text" id="filtro-doc" class="search-input" placeholder="N° Factura/Boleta" onkeyup="aplicarFiltros()" title="Buscar por Documento">
                     <input type="date" id="filtro-fecha" class="search-input" onchange="aplicarFiltros()" title="Buscar por fecha">
                     <input type="text" id="filtro-codigo" class="search-input" placeholder="Código SKU" onkeyup="aplicarFiltros()">
-                    <input type="text" id="filtro-nombre" class="search-input" placeholder="Nombre de Producto" onkeyup="aplicarFiltros()" style="grid-column: span 2;">
+                    <input type="text" id="filtro-nombre" class="search-input" placeholder="Nombre de Producto" onkeyup="aplicarFiltros()">
                 </div>
                 <button type="button" class="btn-limpiar" onclick="limpiarFiltros()">
                     <span class="material-icons-outlined" style="font-size: 14px;">filter_alt_off</span> Limpiar Filtros
@@ -181,7 +184,6 @@
 <script>
     'use strict';
 
-    // Variable global para almacenar los datos descargados del servidor
     let globalProductos = [];
     let confirmCallback = null;
 
@@ -245,9 +247,12 @@
             const categoriaSegura = item.categoria || "N/A";
             const almacenSeguro = item.almacen || "N/A";
             
+            // CORRECCIÓN: Leemos el número de documento de la BD, si no hay, ponemos "INGRESO ALMACÉN"
+            const documentoSeguro = (item.documento && item.documento !== 'S/D' && item.documento !== '') ? item.documento : "INGRESO ALMACÉN";
+            
             let fechaMostrada = item.fecha_ingreso || item.fecha || "--/--/----";
             if(fechaMostrada.includes('T')) {
-                fechaMostrada = fechaMostrada.split('T')[0]; // Extraer solo la fecha de Postgres
+                fechaMostrada = fechaMostrada.split('T')[0];
             }
             if(fechaMostrada.includes('-')) {
                 const [yyyy, mm, dd] = fechaMostrada.split('-');
@@ -262,9 +267,11 @@
 
             const card = document.createElement('div');
             card.className = `entry-card ${item.anulado ? 'anulado' : ''}`;
+            
+            // CORRECCIÓN: Header actualizado con el ícono y el número de documento (Ej. B-2)
             card.innerHTML = `
                 <div class="entry-card-header">
-                    <span class="doc-id"><span class="material-icons-outlined" style="font-size: 14px;">receipt_long</span> INGRESO ALMACÉN</span>
+                    <span class="doc-id"><span class="material-icons-outlined" style="font-size: 16px;">receipt_long</span> ${documentoSeguro}</span>
                     <span class="date">${fechaMostrada}</span>
                 </div>
                 
@@ -310,10 +317,12 @@
     // ==========================================
     function aplicarFiltros() {
         let valFecha = document.getElementById('filtro-fecha').value; 
+        const valDoc = document.getElementById('filtro-doc').value.toLowerCase().trim();
         const valCodigo = document.getElementById('filtro-codigo').value.toLowerCase().trim();
         const valNombre = document.getElementById('filtro-nombre').value.toLowerCase().trim();
 
         const datosFiltrados = globalProductos.filter(item => {
+            const matchDoc = (item.documento || "").toString().toLowerCase().includes(valDoc);
             const matchCodigo = (item.codigo || item.cod || "").toString().toLowerCase().includes(valCodigo);
             const matchNombre = (item.nombre || "").toString().toLowerCase().includes(valNombre);
             
@@ -324,13 +333,14 @@
                 matchFecha = (fechaItem === valFecha); 
             }
             
-            return matchFecha && matchCodigo && matchNombre;
+            return matchFecha && matchCodigo && matchNombre && matchDoc;
         });
 
         renderizarEntradas(datosFiltrados);
     }
 
     function limpiarFiltros() {
+        document.getElementById('filtro-doc').value = '';
         document.getElementById('filtro-fecha').value = '';
         document.getElementById('filtro-codigo').value = '';
         document.getElementById('filtro-nombre').value = '';
@@ -346,7 +356,6 @@
             async () => {
                 mostrarToast("Anulando en el servidor...");
                 try {
-                    // Actualizar estado en el servidor Core i5
                     const respuesta = await fetch(`${API_BASE_URL}/productos/${codigoProducto}/anular`, {
                         method: 'PUT'
                     });
@@ -355,7 +364,6 @@
                         throw new Error("No se pudo anular en el servidor");
                     }
 
-                    // Actualizar el array local para no recargar toda la página
                     globalProductos = globalProductos.map(item => {
                         if(item.codigo === codigoProducto || item.cod === codigoProducto) { item.anulado = true; }
                         return item;
@@ -375,7 +383,6 @@
     // DESCARGAR DATOS DESDE EL SERVIDOR AL INICIAR
     // ==========================================
     window.onload = async () => {
-        // --- INICIO DEL GUARDIÁN ---
         const sesionStr = localStorage.getItem('isa_sesion');
         
         if (!sesionStr) {
@@ -389,20 +396,17 @@
             window.location.href = 'Control.html';
             return;
         }
-        // --- FIN DEL GUARDIÁN ---
 
         const hoy = new Date();
         document.getElementById('txt-fecha').innerHTML = `Generado: <strong>${hoy.toLocaleDateString('es-PE')}</strong>`;
         
         try {
-            // Descargar productos desde el Servidor Local
             const respuesta = await fetch(`${API_BASE_URL}/productos`);
             
             if (!respuesta.ok) throw new Error("Fallo de conexión");
 
             globalProductos = await respuesta.json();
 
-            // Ordenamos por fecha descendente
             globalProductos.sort((a, b) => new Date(b.fecha_ingreso) - new Date(a.fecha_ingreso));
 
             renderizarEntradas(globalProductos);
