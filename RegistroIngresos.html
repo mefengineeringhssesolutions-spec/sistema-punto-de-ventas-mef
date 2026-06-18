@@ -350,7 +350,7 @@
     }
 
     // ==========================================
-    // INICIALIZACIÓN Y DESCARGA
+    // INICIALIZACIÓN Y DESCARGA DE CONFIGURACIÓN
     // ==========================================
     window.onload = async () => {
         const sesionStr = localStorage.getItem('isa_sesion');
@@ -373,8 +373,10 @@
                     catAlmacenes = data.almacenes || ['A1C1', 'A1C2', 'A1C3'];
                     catCategorias = data.categorias || ['OTROS', 'COSMÉTICOS', 'ROPA', 'TECNOLOGÍA', 'CELULARES'];
                     catUnidades = data.unidades || ['UND', 'PAR', 'PAQU'];
-                    globalIgv = parseFloat(data.igv) || 18;
-                    globalMargen = parseFloat(data.margen_sugerido) || 30;
+                    
+                    // CORRECCIÓN BLINDADA: Ahora respeta matemáticamente el valor "0" absoluto
+                    globalIgv = (data.igv !== null && data.igv !== undefined && data.igv !== "") ? parseFloat(data.igv) : 18;
+                    globalMargen = (data.margen_sugerido !== null && data.margen_sugerido !== undefined && data.margen_sugerido !== "") ? parseFloat(data.margen_sugerido) : 30;
                 }
             }
 
@@ -412,6 +414,7 @@
         llenarCustomSelect('unidad', catUnidades, 'straighten');
     }
 
+    // Lógica Matemática (Ahora respeta 0% de margen)
     function calcularPrecioVenta() {
         const cantidad = parseFloat(document.getElementById('in-cantidad').value) || 0;
         const costoTotal = parseFloat(document.getElementById('in-costo-total').value) || 0;
@@ -453,7 +456,7 @@
         btnGuardar.disabled = true;
 
         const nuevoIngreso = {
-            documento: numDoc, // <-- AQUÍ SE ENVÍA EL NÚMERO DE DOCUMENTO AL BACKEND
+            documento: numDoc, 
             codigo: codProd,
             nombre: nombreProd,
             categoria: categoria,
@@ -464,8 +467,6 @@
             precio_unitario_pen: parseFloat(document.getElementById('in-precio-calculado').value),
             fecha_ingreso: document.getElementById('in-fecha').value
         };
-
-        console.log("Enviando paquete al servidor:", nuevoIngreso);
 
         try {
             const respuesta = await fetch(`${API_BASE_URL}/productos`, {
@@ -509,7 +510,7 @@
         try {
             const hojaPrincipalDatos = [
                 ["Nº de documento", "Codigo", "Nombre del Producto", "Categoria", "Almacen", "Unidad", "Cantidad", "Costo Total"],
-                ["F-0001", "PROD-DEMO", "EJEMPLO DE PRODUCTO", catCategorias[0], catAlmacenes[0], catUnidades[0], 10, 150.50]
+                ["F-0001", "PROD-DEMO", "EJEMPLO DE PRODUCTO", catCategorias[0] || "", catAlmacenes[0] || "", catUnidades[0] || "", 10, 150.50]
             ];
             const wsPrincipal = XLSX.utils.aoa_to_sheet(hojaPrincipalDatos);
             wsPrincipal['!cols'] = [{wch: 18}, {wch: 15}, {wch: 30}, {wch: 20}, {wch: 20}, {wch: 10}, {wch: 10}, {wch: 15}];
@@ -596,10 +597,12 @@
 
                     const fechaAutomatica = new Date().toISOString().split('T')[0];
                     const costoUnitario = costoTotal / cantidad;
+                    
+                    // Cálculo respetando el Margen en 0% desde Excel también
                     const precioSug = parseFloat(((costoUnitario + (costoUnitario * (globalMargen / 100))) * (1 + (globalIgv / 100))).toFixed(2));
 
                     productosMasivos.push({
-                        documento: numDoc, // <-- AQUÍ SE ENVÍA EL NÚMERO DE DOCUMENTO DESDE EL EXCEL
+                        documento: numDoc, 
                         codigo: codProd,
                         nombre: nombreProd,
                         categoria: categoria,
