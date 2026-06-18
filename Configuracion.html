@@ -91,7 +91,7 @@
         .btn-backup.danger { background: #fef2f2; color: var(--p-critical); border-color: #fecaca; margin-top: 10px;}
         .btn-backup.danger:hover { background: #fee2e2; }
 
-        .polaris-bottom-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--p-surface); padding: 16px 20px; box-shadow: var(--p-shadow-bar); display: flex; justify-content: flex-end; align-items: center; z-index: 100; border-top: 1px solid var(--p-border); }
+        .polaris-bottom-bar { position: fixed; bottom: 0; left: 0; width: 100%; background: var(--p-surface); padding: 16px 20px; box-shadow: var(--p-shadow-bar); display: flex; justify-content: flex-end; align-items: center; z-index: 50; border-top: 1px solid var(--p-border); }
 
         .polaris-btn-primary { background-color: var(--p-action-primary); color: white; border: 1px solid transparent; padding: 14px 24px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; transition: all 0.2s; width: 100%; max-width: 750px; margin: 0 auto; display: flex; align-items: center; justify-content: center; gap: 8px; text-transform: uppercase; letter-spacing: 1px; }
         .polaris-btn-primary:hover { background-color: var(--p-action-primary-hover); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);}
@@ -281,7 +281,6 @@
         </button>
     </div>
 
-    <!-- Modal Alerta Estándar -->
     <div id="modal-alerta" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header" id="alerta-header">
@@ -295,7 +294,6 @@
         </div>
     </div>
 
-    <!-- Modal Elegante para Confirmar Eliminación de Catálogo -->
     <div id="modal-confirm-catalogo" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header warning">
@@ -312,7 +310,6 @@
         </div>
     </div>
 
-    <!-- Modal de Peligro Extremo (Borrado Total) -->
     <div id="modal-danger" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header error">
@@ -591,6 +588,8 @@
             } catch (error) {
                 console.error(error);
                 mostrarAlerta("Error", error.message || "El archivo es válido, pero falló la conexión con la Core i5.", "error");
+            } finally {
+                event.target.value = ''; // Permite seleccionar el mismo archivo de nuevo si falló
             }
         };
         reader.readAsText(file);
