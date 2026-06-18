@@ -121,7 +121,7 @@
         <div class="dashboard-grid">
             <div class="dash-card">
                 <h3>Costo Inventario</h3>
-                <div class="value" id="kpi-costo">S/ 0.00</div>
+                <div class="value" id="kpi-costo" style="color: var(--p-critical);">S/ 0.00</div>
             </div>
             <div class="dash-card">
                 <h3>Valorización</h3>
@@ -185,15 +185,11 @@
         setTimeout(() => { toast.style.display = 'none'; }, 2500);
     }
 
-    // Variables globales para la gestión en memoria
     let globalInventario = [];
     let datosFiltrados = [];
     let configGlobal = { igv: 18, descmax: 50, margenSugerido: 30 };
     const formatoSoles = new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' });
 
-    // ==========================================
-    // SISTEMA VISUAL DE ALERTAS (Elegante)
-    // ==========================================
     function mostrarAlerta(titulo, mensaje, tipo = 'warning') {
         const modal = document.getElementById('modal-alerta');
         const header = document.getElementById('alerta-header');
@@ -202,15 +198,13 @@
         document.getElementById('alerta-titulo').innerText = titulo;
         document.getElementById('alerta-mensaje').innerText = mensaje;
         
-        // Limpiamos estilos anteriores
         header.className = 'modal-header'; 
         header.style.color = '';
         
-        // Aplicamos el diseño profesional según el tipo
         if (tipo === 'warning') { header.classList.add('warning'); icon.innerText = 'warning'; } 
         else if (tipo === 'success') { header.style.color = 'var(--p-success)'; icon.innerText = 'check_circle'; }
         else if (tipo === 'error') { header.classList.add('error'); icon.innerText = 'error'; }
-        else if (tipo === 'info') { header.style.color = 'var(--p-interactive)'; icon.innerText = 'info'; } // Estilo azul profesional
+        else if (tipo === 'info') { header.style.color = 'var(--p-interactive)'; icon.innerText = 'info'; }
 
         modal.style.display = 'flex';
     }
@@ -218,11 +212,10 @@
     function cerrarAlerta() { document.getElementById('modal-alerta').style.display = 'none'; }
 
     // ==========================================
-    // DESCARGAR Y PROCESAR INVENTARIO (SERVIDOR LOCAL)
+    // DESCARGAR Y PROCESAR INVENTARIO
     // ==========================================
     async function cargarInventarioNube() {
         try {
-            // 1. Cargar configuración de impuestos desde Servidor Local
             const respuestaConf = await fetch(`${API_BASE_URL}/configuracion`);
             if (respuestaConf.ok) {
                 const confData = await respuestaConf.json();
@@ -233,27 +226,23 @@
                 }
             }
 
-            // 2. Descargar todos los productos válidos desde el Servidor Local
             const respuestaProd = await fetch(`${API_BASE_URL}/productos`);
             if (!respuestaProd.ok) throw new Error("Fallo al descargar productos");
             
             const prodData = await respuestaProd.json();
             globalInventario = [];
 
-            // Factor para extraer el costo unitario puro a partir del precio de venta final
-            const factorCalculo = (1 + (configGlobal.margenSugerido / 100)) * (1 + (configGlobal.igv / 100));
-
-            // Filtramos solo los que no están anulados
             const productosValidos = prodData.filter(p => p.anulado === false);
 
             productosValidos.forEach(p => {
                 const stockActual = parseFloat(p.cant) || 0;
                 const precioUnitario = parseFloat(p.precio_unitario_pen) || 0;
+                const costoInversion = parseFloat(p.costo_total_usd) || 0; 
                 
-                // Ingeniería Inversa: Calculamos el costo unitario basado en el margen del sistema
+                // CÁLCULO MATEMÁTICO REAL EXTRAÍDO DIRECTAMENTE DE POSTGRESQL
                 let costoUnitario = 0;
-                if(factorCalculo > 0) {
-                    costoUnitario = precioUnitario / factorCalculo;
+                if(stockActual > 0 && costoInversion > 0) {
+                    costoUnitario = costoInversion / stockActual;
                 }
 
                 globalInventario.push({
@@ -264,13 +253,12 @@
                     stockActual: stockActual,
                     costoUnitario: costoUnitario,
                     precioUnitario: precioUnitario,
-                    costoTotal: stockActual * costoUnitario,
+                    costoTotal: costoInversion, // Mostramos la inversión real guardada en BD
                     precioTotal: stockActual * precioUnitario,
                     desc: configGlobal.descmax
                 });
             });
 
-            // Asignar colores de estado (Semáforo de Stock)
             globalInventario = globalInventario.map(prod => {
                 let estadoClass = "stock-ok";
                 let estadoIcon = "check_circle";
@@ -283,7 +271,6 @@
                 return { ...prod, estadoClass, estadoIcon };
             });
 
-            // Inicializamos la vista filtrada con todos los datos
             datosFiltrados = [...globalInventario];
             aplicarFiltros(); 
 
@@ -359,7 +346,7 @@
                     </div>
 
                     <div class="financial-details">
-                        <span>Costo Inv: <strong>${formatoSoles.format(Math.max(0, item.costoTotal))}</strong></span>
+                        <span>Costo Inv: <strong style="color: var(--p-critical);">${formatoSoles.format(Math.max(0, item.costoTotal))}</strong></span>
                         <span>Valorización: <strong style="color: var(--p-interactive);">${formatoSoles.format(Math.max(0, item.precioTotal))}</strong></span>
                     </div>
                 </div>
@@ -372,9 +359,6 @@
         document.getElementById('kpi-cantidad').innerText = datos.length;
     }
 
-    // ==========================================
-    // SISTEMA DE BÚSQUEDA EN MEMORIA
-    // ==========================================
     function aplicarFiltros() {
         const valCodigo = document.getElementById('filtro-codigo').value.toLowerCase().trim();
         const valNombre = document.getElementById('filtro-nombre').value.toLowerCase().trim();
@@ -398,16 +382,11 @@
         aplicarFiltros();
     }
 
-    // ==========================================
-   // UTILIDAD: EXPORTAR INVENTARIO A EXCEL (CORREGIDO)
-    // ==========================================
     function exportarDatos() {
         if(datosFiltrados.length === 0) {
             return mostrarAlerta("Inventario Vacío", "No hay datos en pantalla para exportar a Excel.", "warning");
         }
 
-        // 1. DETECTOR INTELIGENTE DE APLICACIÓN MÓVIL
-        // Evita que el WebView de Flutter se congele al intentar descargar
         const userAgent = navigator.userAgent.toLowerCase();
         const esAppNativa = userAgent.includes('wv') || (userAgent.includes('android') && userAgent.includes('version/'));
 
@@ -419,10 +398,8 @@
             );
         }
 
-        // 2. SI ES NAVEGADOR PC, GENERAMOS EL EXCEL
         mostrarToast("Generando archivo Excel...");
 
-        // Pequeño retraso para que el Toast se muestre antes de que SheetJS tome el procesador
         setTimeout(() => {
             try {
                 const datosExcel = datosFiltrados.map(row => ({
@@ -449,11 +426,7 @@
         }, 300);
     }
 
-    // ==========================================
-    // INICIALIZACIÓN Y GUARDIÁN DE SESIÓN
-    // ==========================================
     window.onload = () => {
-        // --- INICIO DEL GUARDIÁN ---
         const sesionStr = localStorage.getItem('isa_sesion');
         
         if (!sesionStr) {
@@ -463,18 +436,16 @@
 
         const sesion = JSON.parse(sesionStr);
         
-        // Control RBAC: Vendedores NO ven el inventario general (costos, stock total)
         if (sesion.rol === 'Vendedor') {
             alert('Acceso Denegado: Su rol de Vendedor no tiene permisos para acceder al Inventario General y Costos de M.E.F.');
             window.location.href = 'RegistroSalidas.html';
             return;
         }
-        // --- FIN DEL GUARDIÁN ---
 
         const hoy = new Date();
         document.getElementById('fecha-generado').innerText = `Generado: ${hoy.toLocaleDateString('es-PE')}`;
         
-        cargarInventarioNube(); // Dispara la carga de datos desde el Servidor Local
+        cargarInventarioNube(); 
     };
 </script>
 
